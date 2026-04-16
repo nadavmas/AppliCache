@@ -169,6 +169,13 @@ body {
   color: #334155;
 }
 
+.auth-field-hint {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--muted);
+  margin: -2px 0 6px;
+}
+
 .auth-input {
   width: 100%;
   padding: 11px 14px;

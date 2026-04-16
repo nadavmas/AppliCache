@@ -1,10 +1,17 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import AuthLayout from "../components/AuthLayout";
-import { signUp } from "../auth/cognitoStub";
+import {
+  signUp,
+  confirmUserSignUp,
+  resendUserVerificationCode,
+} from "../auth/cognitoSignup.js";
+import {
+  COGNITO_PASSWORD_RULES_MESSAGE,
+  passwordMeetsCognitoPoolRules,
+} from "../auth/cognitoAuthErrors.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const MIN_PASSWORD_LEN = 8;
 /** Cognito-style username: letters, numbers, . _ - */
 const USERNAME_RE = /^[a-zA-Z0-9._-]{3,128}$/;
 
@@ -53,8 +60,8 @@ function validateSignup(values) {
     next.email = "Enter a valid email address.";
 
   if (!password) next.password = "Password is required.";
-  else if (password.length < MIN_PASSWORD_LEN)
-    next.password = `Use at least ${MIN_PASSWORD_LEN} characters.`;
+  else if (!passwordMeetsCognitoPoolRules(password))
+    next.password = COGNITO_PASSWORD_RULES_MESSAGE;
 
   if (!confirmPassword) next.confirmPassword = "Confirm your password.";
   else if (password !== confirmPassword)
@@ -74,6 +81,14 @@ export default function SignupPage() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  /** @type {'signup' | 'verify' | 'complete'} */
+  const [uiStep, setUiStep] = useState("signup");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [verifyError, setVerifyError] = useState("");
+  const [verifyFieldError, setVerifyFieldError] = useState("");
+  const [verifySubmitting, setVerifySubmitting] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState("");
 
   const clearField = (key) => {
     setFieldErrors((prev) => ({ ...prev, [key]: undefined }));
@@ -96,7 +111,7 @@ export default function SignupPage() {
 
     setSubmitting(true);
     try {
-      await signUp({
+      const result = await signUp({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         dateOfBirth,
@@ -104,14 +119,201 @@ export default function SignupPage() {
         email: email.trim(),
         password,
       });
+      if (result.needsEmailConfirmation) {
+        setVerificationCode("");
+        setVerifyError("");
+        setVerifyFieldError("");
+        setResendMessage("");
+        setUiStep("verify");
+      } else {
+        setUiStep("complete");
+      }
     } catch (err) {
-      setFormError(
-        err instanceof Error ? err.message : "Something went wrong. Try again.",
-      );
+      const message =
+        err instanceof Error ? err.message : "Something went wrong. Try again.";
+      const field = /** @type {{ field?: string }} */ (err)?.field;
+      if (field === "password") {
+        setFieldErrors((prev) => ({ ...prev, password: message }));
+      } else {
+        setFormError(message);
+      }
     } finally {
       setSubmitting(false);
     }
   };
+
+  const handleVerifySubmit = async (e) => {
+    e.preventDefault();
+    setVerifyError("");
+    setVerifyFieldError("");
+    setResendMessage("");
+    const code = verificationCode.trim();
+    if (!code) {
+      setVerifyFieldError("Enter the verification code from your email.");
+      return;
+    }
+
+    setVerifySubmitting(true);
+    try {
+      await confirmUserSignUp({
+        username: username.trim(),
+        confirmationCode: code,
+      });
+      setUiStep("complete");
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Something went wrong. Try again.";
+      const field = /** @type {{ field?: string }} */ (err)?.field;
+      if (field === "confirmationCode") {
+        setVerifyFieldError(message);
+      } else {
+        setVerifyError(message);
+      }
+    } finally {
+      setVerifySubmitting(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setVerifyError("");
+    setVerifyFieldError("");
+    setResendMessage("");
+    setResending(true);
+    try {
+      await resendUserVerificationCode({ username: username.trim() });
+      setResendMessage("We sent a new code to your email.");
+    } catch (err) {
+      setVerifyError(
+        err instanceof Error ? err.message : "Could not resend the code.",
+      );
+    } finally {
+      setResending(false);
+    }
+  };
+
+  if (uiStep === "complete") {
+    return (
+      <AuthLayout
+        title="You’re all set"
+        subtitle="Your email is verified. You can sign in with your username or email."
+        footer={
+          <>
+            <Link to="/login">Go to login</Link>
+          </>
+        }
+      />
+    );
+  }
+
+  if (uiStep === "verify") {
+    return (
+      <AuthLayout
+        title="Verify your email"
+        subtitle={`Enter the verification code we sent to ${email.trim() || "your email"}.`}
+        footer={
+          <>
+            Wrong address? You’ll need to{" "}
+            <button
+              type="button"
+              className="auth-link"
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                font: "inherit",
+              }}
+              onClick={() => {
+                setUiStep("signup");
+                setVerificationCode("");
+                setVerifyError("");
+                setVerifyFieldError("");
+                setResendMessage("");
+              }}
+            >
+              go back
+            </button>{" "}
+            and sign up again.
+          </>
+        }
+      >
+        <form className="auth-form" onSubmit={handleVerifySubmit} noValidate>
+          {verifyError ? (
+            <p className="auth-form-error" role="alert">
+              {verifyError}
+            </p>
+          ) : null}
+          {resendMessage ? (
+            <p className="auth-card__subtitle" style={{ margin: "0 0 8px" }}>
+              {resendMessage}
+            </p>
+          ) : null}
+
+          <div className="auth-field">
+            <label htmlFor="signup-verify-code">Verification code</label>
+            <p id="signup-verify-hint" className="auth-field-hint">
+              Check your inbox and spam folder. The code is usually 6 digits.
+            </p>
+            <input
+              id="signup-verify-code"
+              name="confirmationCode"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              className="auth-input"
+              value={verificationCode}
+              onChange={(e) => {
+                setVerificationCode(e.target.value);
+                if (verifyFieldError) setVerifyFieldError("");
+              }}
+              aria-invalid={Boolean(verifyFieldError)}
+              aria-describedby={
+                verifyFieldError
+                  ? "signup-verify-code-error"
+                  : "signup-verify-hint"
+              }
+            />
+            {verifyFieldError ? (
+              <p
+                id="signup-verify-code-error"
+                className="auth-field-error"
+                role="alert"
+              >
+                {verifyFieldError}
+              </p>
+            ) : null}
+          </div>
+
+          <button
+            type="submit"
+            className="btn btn-primary btn--block"
+            disabled={verifySubmitting || resending}
+          >
+            {verifySubmitting ? "Verifying…" : "Verify and continue"}
+          </button>
+
+          <p className="auth-footer" style={{ border: "none", marginTop: 12 }}>
+            Didn&apos;t get a code?{" "}
+            <button
+              type="button"
+              className="auth-link"
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                font: "inherit",
+              }}
+              onClick={handleResendCode}
+              disabled={resending || verifySubmitting}
+            >
+              {resending ? "Sending…" : "Resend code"}
+            </button>
+          </p>
+        </form>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout
@@ -267,6 +469,9 @@ export default function SignupPage() {
 
         <div className="auth-field">
           <label htmlFor="signup-password">Password</label>
+          <p id="signup-password-hint" className="auth-field-hint">
+            {COGNITO_PASSWORD_RULES_MESSAGE}
+          </p>
           <input
             id="signup-password"
             name="password"
@@ -280,7 +485,9 @@ export default function SignupPage() {
             }}
             aria-invalid={Boolean(fieldErrors.password)}
             aria-describedby={
-              fieldErrors.password ? "signup-password-error" : undefined
+              fieldErrors.password
+                ? "signup-password-error"
+                : "signup-password-hint"
             }
           />
           {fieldErrors.password ? (
