@@ -112,6 +112,11 @@ Update this section only when explicitly requested.
 | Added `AppliCacheData` DynamoDB table to `backend/template.yaml` (partition key `PK`, sort key `SK`, on-demand billing) with stack outputs for name and ARN. | 2026-04-16 | Establishes single-table storage for profiles and future application entities. |
 | Implemented Cognito **Post Confirmation** Lambda at `backend/functions/postConfirmation/` (Node.js 20, AWS SDK v3 `PutItem`); profile item shape `PK` = `USER#<sub>`, `SK` = `PROFILE#<sub>` with email, names, birthdate, username, `createdAt`. Wired IAM (`dynamodb:PutItem` on table only), `AWS::Lambda::Permission` for `cognito-idp.amazonaws.com`, and `CognitoUserPool.LambdaConfig.PostConfirmation` in SAM. | 2026-04-16 | Confirmed users get a profile row automatically after email verification. |
 | Added root `.gitignore` entry `node_modules/` (covers frontend and packaged Lambda dependencies). | 2026-04-16 | Avoids committing installed packages. |
+| Implemented **boards** Lambda (`GET`/`POST /boards`): create/list user boards in `AppliCacheData` with `PK`=`USER#<sub>`, `SK`=`BOARD#<id>`; `POST` stores `entityType: BOARD`, `boardName`, `createdAt`/`updatedAt` (ISO), default **columns** (Company / Job Title / Status) with `crypto.randomUUID()` ids, **`rows: []`**; `GET` returns boards with `columns`, `rows`, `entityType`, timestamps. | 2026-04-16 | `backend/functions/boards/index.js`; REST authorizer `sub` from Cognito claims. |
+| Frontend **boards API client** (`listBoards`, `createBoard`) with JSDoc for response shapes; `VITE_API_URL` base + Bearer id token. | 2026-04-16 | `frontend/src/api/boardsApi.js`. |
+| Dashboard **job boards**: `boardFromServer` / `createEmptyBoard` with **`persisted`** and **`columnsLocked`**; list boards on load when API configured; table UI with optional add-column, entries gate, rows. | 2026-04-16 | `frontend/src/dashboard/boardUtils.js`, `DashboardPage.jsx`, `BoardTableView.jsx`. |
+| **Deferred save UX**: sidebar flow only adds a **local draft** (`draft-<uuid>`); **`POST /boards` runs only** from the primary **“Create new table”** control **below the table**; `savingBoardId` / `saveBoardError`; bar hidden after successful save. Sidebar uses **Continue** + **Cancel** (no blur-to-submit); drafts show **(unsaved)**. | 2026-04-16 | `DashboardPage.jsx`, `DashboardSidebar.jsx`; styles `.dashboard-draft-save`, draft hints. |
+| **Draft vs persisted columns**: drafts use **`columnsLocked: false`** so users can add columns before save; after save, **`boardFromServer`** sets **`columnsLocked: true`** (no **+**); extra draft-only columns are not yet persisted by the API (POST still provisions default three columns). | 2026-04-16 | `handleAddColumn` gated on `!columnsLocked` only. |
 
 ### Recent work log (since last backlog snapshot)
 
@@ -128,6 +133,17 @@ Entries below mirror the table above in narrative form for quick scanning.
 **2026-04-16 — Backend / AWS**
 
 - Defined the single DynamoDB table `AppliCacheData` in SAM and deployed the Post Confirmation Lambda that persists `USER#<sub>` / `PROFILE#<sub>` items after successful sign-up confirmation, with least-privilege IAM and Cognito invoke permission.
+
+**2026-04-16 — Boards API & DynamoDB shape**
+
+- Boards Lambda implements `GET`/`POST` for `/boards`: items include `entityType: BOARD`, ISO `createdAt`/`updatedAt`, server-generated default columns with stable UUID ids, and empty `rows` on create; list returns the same fields for each board.
+
+**2026-04-16 — Dashboard: boards UI & deferred save**
+
+- Connected the SPA to the boards API when `VITE_API_URL` is set; normalized server payloads in `boardFromServer` with `persisted`/`columnsLocked` flags.
+- Adopted **deferred persistence**: naming a table in the sidebar creates a **draft** only; the user saves to DynamoDB via **Create new table** under the main table; loading and error states are scoped to that action.
+- Sidebar lists drafts with an **(unsaved)** label; the inline create flow uses **Continue** / **Cancel** (no accidental submit on blur).
+- **Drafts** allow the **+ add column** control; **persisted** boards from the server hide it (`columnsLocked`). Note: custom columns added in a draft are not written by the current `POST` contract (backend still seeds the default three columns).
 
 ## Update Policy
 

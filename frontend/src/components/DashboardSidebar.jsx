@@ -1,34 +1,5 @@
 import { useRef } from "react"
 
-const PendingSpinner = () => (
-  <svg
-    className="dashboard-sidebar__pending-spinner"
-    width={14}
-    height={14}
-    viewBox="0 0 24 24"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    aria-hidden="true"
-  >
-    <circle
-      className="dashboard-sidebar__pending-track"
-      cx="12"
-      cy="12"
-      r="9"
-      stroke="currentColor"
-      strokeWidth="2"
-      opacity="0.25"
-    />
-    <path
-      className="dashboard-sidebar__pending-arc"
-      d="M12 3a9 9 0 0 1 9 9"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-    />
-  </svg>
-)
-
 const PlusIcon = () => (
   <svg
     className="dashboard-sidebar__create-icon"
@@ -62,7 +33,6 @@ export default function DashboardSidebar({
   onCommitCreate,
   onCancelCreate,
   boardsLoading = false,
-  createBoardSubmitting = false,
   createBoardError = "",
   onSignOut,
   signingOut = false,
@@ -81,7 +51,6 @@ export default function DashboardSidebar({
     }
     if (e.key === "Escape") {
       e.preventDefault()
-      if (createBoardSubmitting) return
       createEscapeRef.current = true
       onCancelCreate?.()
     }
@@ -93,8 +62,15 @@ export default function DashboardSidebar({
       return
     }
     const trimmed = e.currentTarget.value.trim()
-    if (trimmed) onCommitCreate?.()
-    else onCancelCreate?.()
+    if (!trimmed) onCancelCreate?.()
+  }
+
+  const handleCancelClick = () => {
+    onCancelCreate?.()
+  }
+
+  const handleCommitClick = () => {
+    onCommitCreate?.()
   }
 
   return (
@@ -119,24 +95,33 @@ export default function DashboardSidebar({
 
         {!boardsLoading && boards.length > 0 ? (
           <ul className="dashboard-sidebar__list">
-            {boards.map((board) => (
-              <li key={board.id}>
-                <button
-                  type="button"
-                  className={
-                    board.pending
-                      ? "dashboard-sidebar__item dashboard-sidebar__item--pending"
-                      : "dashboard-sidebar__item"
-                  }
-                  aria-current={board.id === activeBoardId ? "true" : undefined}
-                  aria-busy={board.pending ? "true" : undefined}
-                  onClick={() => onSelectBoard?.(board.id)}
-                >
-                  {board.pending ? <PendingSpinner /> : null}
-                  <span className="dashboard-sidebar__item-label">{board.name}</span>
-                </button>
-              </li>
-            ))}
+            {boards.map((board) => {
+              const isDraft = board.persisted === false
+              return (
+                <li key={board.id}>
+                  <button
+                    type="button"
+                    className={
+                      isDraft
+                        ? "dashboard-sidebar__item dashboard-sidebar__item--draft"
+                        : "dashboard-sidebar__item"
+                    }
+                    aria-current={board.id === activeBoardId ? "true" : undefined}
+                    onClick={() => onSelectBoard?.(board.id)}
+                  >
+                    <span className="dashboard-sidebar__item-label">
+                      {board.name}
+                      {isDraft ? (
+                        <span className="dashboard-sidebar__draft-badge">
+                          {" "}
+                          (unsaved)
+                        </span>
+                      ) : null}
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
           </ul>
         ) : null}
 
@@ -149,27 +134,44 @@ export default function DashboardSidebar({
         >
           <div className="dashboard-sidebar__create-slot">
             {isCreatingTable ? (
-              <input
-                type="text"
-                className="dashboard-sidebar__create-input auth-input"
-                value={createTableName}
-                onChange={(e) => onCreateTableNameChange?.(e.target.value)}
-                onKeyDown={handleCreateKeyDown}
-                onBlur={handleCreateBlur}
-                placeholder="Table name"
-                aria-label="New table name"
-                disabled={createBoardSubmitting}
-                autoFocus
-              />
+              <div className="dashboard-sidebar__create-form">
+                <input
+                  type="text"
+                  className="dashboard-sidebar__create-input auth-input"
+                  value={createTableName}
+                  onChange={(e) => onCreateTableNameChange?.(e.target.value)}
+                  onKeyDown={handleCreateKeyDown}
+                  onBlur={handleCreateBlur}
+                  placeholder="Table name"
+                  aria-label="New table name"
+                  autoFocus
+                />
+                <div className="dashboard-sidebar__create-actions">
+                  <button
+                    type="button"
+                    className="dashboard-sidebar__create-submit"
+                    onClick={handleCommitClick}
+                  >
+                    Continue
+                  </button>
+                  <button
+                    type="button"
+                    className="dashboard-sidebar__create-cancel"
+                    onClick={handleCancelClick}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
             ) : (
               <button
                 type="button"
                 className="dashboard-sidebar__create"
                 onClick={() => onStartCreate?.()}
-                disabled={boardsLoading || createBoardSubmitting}
+                disabled={boardsLoading}
               >
                 <PlusIcon />
-                {createBoardSubmitting ? "Creating…" : "Create new table"}
+                Create new table
               </button>
             )}
           </div>

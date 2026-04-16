@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { getCurrentUser } from "aws-amplify/auth";
 import { signOut } from "../auth/cognitoStub";
-import { createBoard, isBoardsApiConfigured, listBoards } from "../api/boardsApi";
+import {
+  createBoard,
+  getBoard,
+  isBoardsApiConfigured,
+  listBoards,
+} from "../api/boardsApi";
 import DashboardSidebar from "../components/DashboardSidebar";
 import BoardTableView from "../components/BoardTableView";
 import {
@@ -27,8 +32,10 @@ export default function DashboardPage() {
 
   const [boardsLoading, setBoardsLoading] = useState(false);
   const [boardsLoadError, setBoardsLoadError] = useState("");
-  const [createBoardSubmitting, setCreateBoardSubmitting] = useState(false);
   const [createBoardError, setCreateBoardError] = useState("");
+
+  const [savingBoardId, setSavingBoardId] = useState(null);
+  const [saveBoardError, setSaveBoardError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -90,6 +97,29 @@ export default function DashboardPage() {
     }
   }, [boards, activeBoardId]);
 
+  useEffect(() => {
+    setSaveBoardError("");
+  }, [activeBoardId]);
+
+  const handleSelectBoard = (boardId) => {
+    setActiveBoardId(boardId);
+    if (!isBoardsApiConfigured()) return;
+    if (boardId.startsWith("draft-")) return;
+    const b = boards.find((x) => x.id === boardId);
+    if (!b?.persisted) return;
+    getBoard(boardId)
+      .then((data) => {
+        setBoards((prev) =>
+          prev.map((x) =>
+            x.id === boardId ? boardFromServer(data) : x,
+          ),
+        );
+      })
+      .catch(() => {
+        /* keep listed copy; optional: surface toast */
+      });
+  };
+
   const handleSignOut = async () => {
     setLogoutError("");
     setSigningOut(true);
@@ -107,13 +137,11 @@ export default function DashboardPage() {
 
   const handleStartCreateTable = () => {
     setCreateBoardError("");
-    setCreateBoardSubmitting(false);
     setIsCreatingTable(true);
     setCreateTableName("");
   };
 
   const handleCancelCreateTable = () => {
-    if (createBoardSubmitting) return;
     setIsCreatingTable(false);
     setCreateTableName("");
     setCreateBoardError("");
@@ -126,53 +154,64 @@ export default function DashboardPage() {
       setCreateTableName("");
       return;
     }
-    if (createBoardSubmitting) return;
 
     if (isBoardsApiConfigured()) {
       setCreateBoardError("");
-      const pendingId = `pending-${crypto.randomUUID()}`;
-      const optimisticBoard = {
+      const draftId = `draft-${crypto.randomUUID()}`;
+      const draftBoard = {
         ...createEmptyBoard(name),
-        id: pendingId,
-        pending: true,
+        id: draftId,
+        persisted: false,
+        columnsLocked: false,
       };
-      setBoards((prev) => [...prev, optimisticBoard]);
-      setActiveBoardId(pendingId);
+      setBoards((prev) => [...prev, draftBoard]);
+      setActiveBoardId(draftId);
       setIsCreatingTable(false);
       setCreateTableName("");
-      setCreateBoardSubmitting(true);
-      createBoard(name)
-        .then((created) => {
-          const board = boardFromServer(created);
-          setBoards((prev) =>
-            prev.map((b) => (b.id === pendingId ? board : b)),
-          );
-          setActiveBoardId(board.id);
-        })
-        .catch((err) => {
-          setBoards((prev) => {
-            const next = prev.filter((b) => b.id !== pendingId);
-            setActiveBoardId((current) => {
-              if (current !== pendingId) return current;
-              return next[0]?.id ?? null;
-            });
-            return next;
-          });
-          setCreateBoardError(
-            err instanceof Error ? err.message : "Could not create table.",
-          );
-        })
-        .finally(() => {
-          setCreateBoardSubmitting(false);
-        });
       return;
     }
 
-    const board = createEmptyBoard(name);
+    const board = {
+      ...createEmptyBoard(name),
+      persisted: true,
+      columnsLocked: false,
+    };
     setBoards((prev) => [...prev, board]);
     setActiveBoardId(board.id);
     setIsCreatingTable(false);
     setCreateTableName("");
+  };
+
+  const handleSaveDraftBoard = (boardId) => {
+    if (!isBoardsApiConfigured() || savingBoardId) return;
+    const board = boards.find((b) => b.id === boardId);
+    if (!board || board.persisted) return;
+
+    const name = board.name.trim();
+    if (!name) return;
+
+    setSaveBoardError("");
+    setSavingBoardId(boardId);
+    const columnPayload = board.columns.map((c) => ({
+      id: c.id,
+      name: c.name,
+    }));
+    createBoard(name, columnPayload)
+      .then((created) => {
+        const saved = boardFromServer(created);
+        setBoards((prev) =>
+          prev.map((b) => (b.id === boardId ? saved : b)),
+        );
+        setActiveBoardId(saved.id);
+      })
+      .catch((err) => {
+        setSaveBoardError(
+          err instanceof Error ? err.message : "Could not save table.",
+        );
+      })
+      .finally(() => {
+        setSavingBoardId(null);
+      });
   };
 
   const activeBoard =
@@ -182,7 +221,7 @@ export default function DashboardPage() {
     if (!activeBoardId) return;
     setBoards((prev) => {
       const b = prev.find((x) => x.id === activeBoardId);
-      if (!b || b.pending) return prev;
+      if (!b || b.columnsLocked) return prev;
       return prev.map((x) =>
         x.id === activeBoardId ? addColumnToBoard(x, columnName) : x,
       );
@@ -192,7 +231,7 @@ export default function DashboardPage() {
   const handleEnableBoardEntries = (boardId) => {
     setBoards((prev) => {
       const b = prev.find((x) => x.id === boardId);
-      if (!b || b.pending) return prev;
+      if (!b?.persisted) return prev;
       return prev.map((x) =>
         x.id === boardId ? { ...x, entriesEnabled: true } : x,
       );
@@ -203,7 +242,7 @@ export default function DashboardPage() {
     if (!activeBoardId) return;
     setBoards((prev) => {
       const b = prev.find((x) => x.id === activeBoardId);
-      if (!b?.entriesEnabled || b.pending) return prev;
+      if (!b?.persisted || !b?.entriesEnabled) return prev;
       return prev.map((x) =>
         x.id === activeBoardId ? addRowToBoard(x) : x,
       );
@@ -214,7 +253,7 @@ export default function DashboardPage() {
     if (!activeBoardId) return;
     setBoards((prev) => {
       const b = prev.find((x) => x.id === activeBoardId);
-      if (!b?.entriesEnabled || b.pending) return prev;
+      if (!b?.persisted || !b?.entriesEnabled) return prev;
       return prev.map((x) =>
         x.id === activeBoardId
           ? updateCell(x, rowId, columnId, value)
@@ -222,6 +261,11 @@ export default function DashboardPage() {
       );
     });
   };
+
+  const showDraftSaveBar =
+    Boolean(activeBoard) &&
+    activeBoard.persisted === false &&
+    isBoardsApiConfigured();
 
   if (status === "checking") {
     return (
@@ -251,7 +295,7 @@ export default function DashboardPage() {
       <DashboardSidebar
         boards={boards}
         activeBoardId={activeBoardId}
-        onSelectBoard={setActiveBoardId}
+        onSelectBoard={handleSelectBoard}
         isCreatingTable={isCreatingTable}
         createTableName={createTableName}
         onCreateTableNameChange={setCreateTableName}
@@ -259,7 +303,6 @@ export default function DashboardPage() {
         onCommitCreate={handleCommitCreateTable}
         onCancelCreate={handleCancelCreateTable}
         boardsLoading={boardsLoading}
-        createBoardSubmitting={createBoardSubmitting}
         createBoardError={createBoardError}
         onSignOut={handleSignOut}
         signingOut={signingOut}
@@ -290,6 +333,8 @@ export default function DashboardPage() {
               <BoardTableView
                 key={activeBoard.id}
                 board={activeBoard}
+                persisted={activeBoard.persisted === true}
+                columnsLocked={activeBoard.columnsLocked === true}
                 entriesEnabled={activeBoard.entriesEnabled === true}
                 onEnableEntries={() =>
                   handleEnableBoardEntries(activeBoard.id)
@@ -298,6 +343,37 @@ export default function DashboardPage() {
                 onAddRow={handleAddRow}
                 onCellChange={handleCellChange}
               />
+              {showDraftSaveBar ? (
+                <div
+                  className="dashboard-draft-save"
+                  role="region"
+                  aria-label="Save new table"
+                >
+                  <p className="dashboard-draft-save__hint">
+                    Save this table to store it in your account. You can add
+                    entries after saving.
+                  </p>
+                  {saveBoardError ? (
+                    <p
+                      className="auth-form-error dashboard-draft-save__error"
+                      role="alert"
+                    >
+                      {saveBoardError}
+                    </p>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="btn btn-primary dashboard-draft-save__btn"
+                    onClick={() => handleSaveDraftBoard(activeBoard.id)}
+                    disabled={savingBoardId === activeBoard.id}
+                    aria-busy={savingBoardId === activeBoard.id ? "true" : undefined}
+                  >
+                    {savingBoardId === activeBoard.id
+                      ? "Saving…"
+                      : "Create new table"}
+                  </button>
+                </div>
+              ) : null}
             </>
           ) : (
             <p className="dashboard-main__meta dashboard-main__meta--solo">

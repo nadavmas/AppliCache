@@ -1,6 +1,7 @@
 const {
   DynamoDBClient,
   QueryCommand,
+  GetItemCommand,
   PutItemCommand,
 } = require("@aws-sdk/client-dynamodb")
 const { marshall, unmarshall } = require("@aws-sdk/util-dynamodb")
@@ -44,6 +45,23 @@ const buildDefaultColumns = () =>
     name,
   }))
 
+/**
+ * Normalize columns from DynamoDB (list of maps) into stable { id, name }[].
+ * Handles odd shapes after unmarshall and drops invalid entries.
+ */
+const sanitizeColumns = (raw) => {
+  if (!Array.isArray(raw)) return []
+  const out = []
+  for (const c of raw) {
+    if (!c || typeof c !== "object") continue
+    const id = c.id != null ? String(c.id).trim() : ""
+    const name = c.name != null ? String(c.name).trim() : ""
+    if (!id) continue
+    out.push({ id, name: name || "Column" })
+  }
+  return out
+}
+
 /** Map DynamoDB row to API row shape */
 const mapRowForApi = (r) => {
   if (!r || typeof r !== "object") return null
@@ -54,6 +72,22 @@ const mapRowForApi = (r) => {
       ? r.cells
       : {}
   return { id, cells }
+}
+
+const buildBoardDto = (row) => {
+  const rawRows = Array.isArray(row.rows) ? row.rows : []
+  const columns = sanitizeColumns(row.columns)
+  const rows = rawRows.map(mapRowForApi).filter(Boolean)
+  const createdAt = row.createdAt ?? ""
+  return {
+    boardId: row.boardId ?? row.SK?.replace(/^BOARD#/, "") ?? "",
+    boardName: row.boardName ?? "",
+    entityType: row.entityType ?? "BOARD",
+    createdAt,
+    updatedAt: row.updatedAt ?? createdAt,
+    columns,
+    rows,
+  }
 }
 
 exports.handler = async (event) => {
@@ -69,8 +103,34 @@ exports.handler = async (event) => {
     return json(401, { message: "Unauthorized" })
   }
 
+  const pk = `USER#${sub}`
+
   if (method === "GET") {
-    const pk = `USER#${sub}`
+    const pathBoardId =
+      event.pathParameters?.boardId != null
+        ? String(event.pathParameters.boardId).trim()
+        : ""
+
+    if (pathBoardId) {
+      const res = await client.send(
+        new GetItemCommand({
+          TableName: tableName,
+          Key: marshall({
+            PK: pk,
+            SK: `BOARD#${pathBoardId}`,
+          }),
+        }),
+      )
+      if (!res.Item) {
+        return json(404, { message: "Board not found" })
+      }
+      const row = unmarshall(res.Item)
+      if (!String(row.SK ?? "").startsWith("BOARD#")) {
+        return json(404, { message: "Board not found" })
+      }
+      return json(200, buildBoardDto(row))
+    }
+
     const res = await client.send(
       new QueryCommand({
         TableName: tableName,
@@ -82,22 +142,9 @@ exports.handler = async (event) => {
       }),
     )
 
-    const boards = (res.Items ?? []).map((item) => {
-      const row = unmarshall(item)
-      const rawRows = Array.isArray(row.rows) ? row.rows : []
-      const columns = Array.isArray(row.columns) ? row.columns : []
-      const rows = rawRows.map(mapRowForApi).filter(Boolean)
-      const createdAt = row.createdAt ?? ""
-      return {
-        boardId: row.boardId ?? row.SK?.replace(/^BOARD#/, "") ?? "",
-        boardName: row.boardName ?? "",
-        entityType: row.entityType ?? "BOARD",
-        createdAt,
-        updatedAt: row.updatedAt ?? createdAt,
-        columns,
-        rows,
-      }
-    })
+    const boards = (res.Items ?? []).map((item) =>
+      buildBoardDto(unmarshall(item)),
+    )
 
     return json(200, { boards })
   }
@@ -122,9 +169,12 @@ exports.handler = async (event) => {
 
     const boardId = randomUUID()
     const now = new Date().toISOString()
-    const columns = buildDefaultColumns()
+    const MAX_COLUMNS = 64
+    const fromClient = sanitizeColumns(payload.columns).slice(0, MAX_COLUMNS)
+    const columns =
+      fromClient.length > 0 ? fromClient : buildDefaultColumns()
     const item = {
-      PK: `USER#${sub}`,
+      PK: pk,
       SK: `BOARD#${boardId}`,
       entityType: "BOARD",
       boardId,

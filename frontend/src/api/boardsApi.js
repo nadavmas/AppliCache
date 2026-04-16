@@ -63,8 +63,50 @@ export const listBoards = async () => {
   return res.json()
 }
 
+/**
+ * Fetch one board by id (full columns and rows from DynamoDB).
+ * @returns {Promise<{
+ *   boardId: string,
+ *   boardName: string,
+ *   entityType?: string,
+ *   createdAt: string,
+ *   updatedAt: string,
+ *   columns: Array<{ id: string, name: string }>,
+ *   rows: Array<{ id: string, cells: Record<string, string> }>,
+ * }>}
+ */
+export const getBoard = async (boardId) => {
+  const base = getBaseUrl()
+  if (!base) {
+    throw new Error("VITE_API_URL is not set")
+  }
+  const idToken = await getIdToken()
+  if (!idToken) {
+    throw new Error("Not signed in")
+  }
+  const pathId = encodeURIComponent(boardId)
+  const res = await fetch(`${base}/boards/${pathId}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+    },
+  })
+  if (res.status === 401) {
+    throw new Error("Session expired. Please sign in again.")
+  }
+  if (res.status === 404) {
+    throw new Error("Table not found.")
+  }
+  if (!res.ok) {
+    throw new Error(await parseErrorBody(res))
+  }
+  return res.json()
+}
+
 // POST: Authorization + Content-Type: application/json (triggers preflight; API must allow OPTIONS without auth — see SAM AddDefaultAuthorizersToCorsPreflight)
 /**
+ * @param {string} boardName
+ * @param {Array<{ id: string, name: string }>} [columns] When provided (e.g. from a draft), persisted to DynamoDB; otherwise the API uses its default three columns.
  * @returns {Promise<{
  *   boardId: string,
  *   boardName: string,
@@ -75,7 +117,7 @@ export const listBoards = async () => {
  *   rows: Array<{ id: string, cells: Record<string, string> }>,
  * }>}
  */
-export const createBoard = async (boardName) => {
+export const createBoard = async (boardName, columns) => {
   const base = getBaseUrl()
   if (!base) {
     throw new Error("VITE_API_URL is not set")
@@ -84,13 +126,23 @@ export const createBoard = async (boardName) => {
   if (!idToken) {
     throw new Error("Not signed in")
   }
+  const body =
+    Array.isArray(columns) && columns.length > 0
+      ? {
+          boardName,
+          columns: columns.map((c) => ({
+            id: String(c.id),
+            name: String(c.name ?? ""),
+          })),
+        }
+      : { boardName }
   const res = await fetch(`${base}/boards`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${idToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ boardName }),
+    body: JSON.stringify(body),
   })
   if (res.status === 401) {
     throw new Error("Session expired. Please sign in again.")

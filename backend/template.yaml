@@ -146,6 +146,7 @@ Resources:
             - Effect: Allow
               Action:
                 - dynamodb:Query
+                - dynamodb:GetItem
                 - dynamodb:PutItem
               Resource: !GetAtt AppliCacheData.Arn
       Events:
@@ -154,6 +155,12 @@ Resources:
           Properties:
             RestApiId: !Ref ApplicacheRestApi
             Path: /boards
+            Method: GET
+        GetBoard:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApplicacheRestApi
+            Path: /boards/{boardId}
             Method: GET
         CreateBoard:
           Type: Api

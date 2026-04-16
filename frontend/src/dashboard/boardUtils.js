@@ -1,6 +1,14 @@
 /** @typedef {{ id: string, name: string }} Column */
 /** @typedef {{ id: string, cells: Record<string, string> }} Row */
-/** @typedef {{ id: string, name: string, columns: Column[], rows: Row[], entriesEnabled: boolean, pending?: boolean }} Board */
+/** @typedef {{
+ *   id: string,
+ *   name: string,
+ *   columns: Column[],
+ *   rows: Row[],
+ *   entriesEnabled: boolean,
+ *   persisted: boolean,
+ *   columnsLocked: boolean,
+ * }} Board */
 
 const newId = () => crypto.randomUUID()
 
@@ -21,6 +29,8 @@ export const createEmptyBoard = (name) => {
     columns,
     rows: [],
     entriesEnabled: false,
+    persisted: false,
+    columnsLocked: true,
   }
 }
 
@@ -35,14 +45,25 @@ const normalizeColumns = (raw) => {
       name: colName,
     }))
   }
-  return raw.map((c) => {
-    if (!c || typeof c !== "object") {
-      return { id: newId(), name: "" }
-    }
-    const id = typeof c.id === "string" && c.id ? c.id : newId()
-    const name = typeof c.name === "string" ? c.name : ""
-    return { id, name }
-  })
+  const mapped = raw
+    .map((c) => {
+      if (!c || typeof c !== "object") return null
+      const id =
+        c.id != null && String(c.id).trim() !== ""
+          ? String(c.id).trim()
+          : ""
+      const name = c.name != null ? String(c.name).trim() : ""
+      if (!id) return null
+      return { id, name: name || "Column" }
+    })
+    .filter(Boolean)
+  if (mapped.length === 0) {
+    return DEFAULT_COLUMN_NAMES.map((colName) => ({
+      id: newId(),
+      name: colName,
+    }))
+  }
+  return mapped
 }
 
 /**
@@ -98,6 +119,8 @@ export const boardFromServer = (server) => {
     columns,
     rows,
     entriesEnabled: false,
+    persisted: true,
+    columnsLocked: true,
   }
 }
 
