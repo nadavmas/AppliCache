@@ -14,76 +14,135 @@ export function passwordMeetsCognitoPoolRules(password) {
 }
 
 /**
- * Sign-in only. Maps exceptions to `identifier` (email/username field) or `password`.
+ * Sign-in only. Maps exceptions to `email` or `password`.
  *
  * Note: With User Pool Client **PreventUserExistenceErrors: ENABLED** (see backend template),
  * Cognito often returns **NotAuthorizedException** for both non-existent users and wrong
  * passwords — it will not return **UserNotFoundException** on sign-in. Use a single safe
  * message on the password field in that case; do not assume you can always show
- * "user not found" under the identifier field.
+ * "user not found" under the email field.
  */
 export const SIGN_IN_BAD_CREDENTIALS_MESSAGE =
-  "Incorrect email, username, or password.";
+  "Incorrect email or password.";
+
+/**
+ * Amplify / AWS SDK errors may wrap the Cognito exception on `underlyingError`.
+ * Collect the chain so we map the real service exception.
+ * @param {unknown} error
+ * @returns {{ name: string; message: string }[]}
+ */
+function collectSignInErrorChain(error) {
+  /** @type {{ name: string; message: string }[]} */
+  const chain = [];
+  let e = error;
+  const seen = new Set();
+  for (let i = 0; i < 6 && e && typeof e === "object" && !seen.has(e); i++) {
+    seen.add(e);
+    const name = String(/** @type {{ name?: string }} */ (e).name ?? "");
+    const message =
+      typeof /** @type {{ message?: string }} */ (e).message === "string"
+        ? String(/** @type {{ message?: string }} */ (e).message)
+        : "";
+    chain.push({ name, message });
+    const next = /** @type {{ underlyingError?: unknown }} */ (e).underlyingError;
+    e = next;
+  }
+  return chain;
+}
 
 /**
  * @param {unknown} error
  * @returns {{ message: string; field?: string }}
  */
 export function mapCognitoSignInError(error) {
-  const name = /** @type {{ name?: string }} */ (error)?.name ?? "";
-  const message =
-    typeof /** @type {{ message?: string }} */ (error)?.message === "string"
-      ? String(/** @type {{ message?: string }} */ (error).message)
-      : "";
+  const chain = collectSignInErrorChain(error);
+  const primary = chain[0] ?? { name: "", message: "" };
+  const name = primary.name;
+  const message = primary.message;
 
-  if (name === "NotAuthorizedException") {
+  const matchByName = (/** @type {string} */ n) =>
+    chain.some((c) => c.name === n);
+
+  const combinedMessage = chain.map((c) => c.message).join(" ");
+
+  if (matchByName("NotAuthorizedException")) {
     return {
       message: SIGN_IN_BAD_CREDENTIALS_MESSAGE,
       field: "password",
     };
   }
 
-  if (name === "UserNotFoundException") {
+  if (matchByName("ResourceNotFoundException")) {
     return {
-      message: "No account found with that email or username.",
-      field: "identifier",
+      message:
+        "Cognito user pool or client was not found. Check VITE_COGNITO_USER_POOL_ID and VITE_COGNITO_USER_POOL_CLIENT_ID match the deployed resources and region.",
     };
   }
 
-  if (name === "UserNotConfirmedException") {
+  if (matchByName("InvalidUserPoolConfigurationException")) {
+    return {
+      message:
+        combinedMessage ||
+        "The Cognito user pool is misconfigured (e.g. missing app client auth flows). Check the pool and app client in the AWS console.",
+    };
+  }
+
+  if (
+    matchByName("InvalidClientException") ||
+    /invalid client/i.test(combinedMessage)
+  ) {
+    return {
+      message:
+        "The Cognito app client ID is invalid. Verify VITE_COGNITO_USER_POOL_CLIENT_ID in .env.local matches the user pool client (no client secret for web apps).",
+    };
+  }
+
+  if (matchByName("UserNotFoundException")) {
+    return {
+      message: "No account found with that email address.",
+      field: "email",
+    };
+  }
+
+  if (matchByName("UserNotConfirmedException")) {
     return {
       message:
         "Confirm your email before signing in. Check your inbox or complete sign-up.",
-      field: "identifier",
+      field: "email",
     };
   }
 
-  if (name === "PasswordResetRequiredException") {
+  if (matchByName("PasswordResetRequiredException")) {
     return {
       message: "You must reset your password before signing in.",
       field: "password",
     };
   }
 
-  if (name === "InvalidParameterException") {
+  if (matchByName("InvalidParameterException")) {
     return {
       message:
-        message || "Some sign-in information is invalid. Check your details.",
+        message ||
+        combinedMessage ||
+        "Some sign-in information is invalid. Check your details.",
     };
   }
 
-  if (name === "LimitExceededException" || /Attempt limit exceeded/i.test(message)) {
+  if (
+    matchByName("LimitExceededException") ||
+    /Attempt limit exceeded/i.test(combinedMessage)
+  ) {
     return {
       message: "Too many attempts. Please wait a few minutes and try again.",
     };
   }
 
-  if (name === "TooManyRequestsException") {
+  if (matchByName("TooManyRequestsException")) {
     return { message: "Too many requests. Try again later." };
   }
 
-  if (message) {
-    return { message };
+  if (message || combinedMessage) {
+    return { message: message || combinedMessage };
   }
 
   return { message: "Sign-in failed. Please try again." };

@@ -4,21 +4,15 @@ import AuthLayout from "../components/AuthLayout";
 import { signIn } from "../auth/cognitoStub";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-/** Same pattern as sign-up username (Cognito username). */
-const USERNAME_RE = /^[a-zA-Z0-9._-]{3,128}$/;
 
-function validateLogin({ identifier, password }) {
+function validateLogin({ email, password }) {
   const next = {};
-  const id = identifier.trim();
+  const e = email.trim();
 
-  if (!id) {
-    next.identifier = "Enter your email or username.";
-  } else if (id.includes("@")) {
-    if (!EMAIL_RE.test(id))
-      next.identifier = "Enter a valid email address.";
-  } else if (!USERNAME_RE.test(id)) {
-    next.identifier =
-      "Use 3–128 characters: letters, numbers, periods, underscores, or hyphens.";
+  if (!e) {
+    next.email = "Enter your email address.";
+  } else if (!EMAIL_RE.test(e)) {
+    next.email = "Enter a valid email address.";
   }
 
   if (!password) next.password = "Password is required.";
@@ -28,26 +22,26 @@ function validateLogin({ identifier, password }) {
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [identifier, setIdentifier] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const identifierInvalid = Boolean(fieldErrors.identifier);
+  const emailInvalid = Boolean(fieldErrors.email);
   const passwordInvalid = Boolean(fieldErrors.password);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormError("");
-    const next = validateLogin({ identifier, password });
+    const next = validateLogin({ email, password });
     setFieldErrors(next);
     if (Object.keys(next).length > 0) return;
 
     setSubmitting(true);
     try {
       await signIn({
-        username: identifier.trim(),
+        username: email.trim(),
         password,
       });
       navigate("/dashboard", { replace: true });
@@ -55,8 +49,8 @@ export default function LoginPage() {
       const message =
         err instanceof Error ? err.message : "Something went wrong. Try again.";
       const field = /** @type {{ field?: string }} */ (err)?.field;
-      if (field === "identifier") {
-        setFieldErrors((prev) => ({ ...prev, identifier: message }));
+      if (field === "email") {
+        setFieldErrors((prev) => ({ ...prev, email: message }));
       } else if (field === "password") {
         setFieldErrors((prev) => ({ ...prev, password: message }));
       } else {
@@ -86,31 +80,35 @@ export default function LoginPage() {
         ) : null}
 
         <div className="auth-field">
-          <label htmlFor="login-identifier">Email or username</label>
+          <label htmlFor="login-email">Email</label>
+          <p id="login-email-hint" className="auth-field-hint">
+            Sign in with the email address you used to register.
+          </p>
           <input
-            id="login-identifier"
-            name="identifier"
-            type="text"
-            autoComplete="username"
+            id="login-email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            placeholder="you@example.com"
             className="auth-input"
-            value={identifier}
+            value={email}
             onChange={(e) => {
-              setIdentifier(e.target.value);
-              if (fieldErrors.identifier)
-                setFieldErrors((prev) => ({ ...prev, identifier: undefined }));
+              setEmail(e.target.value);
+              if (fieldErrors.email)
+                setFieldErrors((prev) => ({ ...prev, email: undefined }));
             }}
-            aria-invalid={identifierInvalid}
+            aria-invalid={emailInvalid}
             aria-describedby={
-              identifierInvalid ? "login-identifier-error" : undefined
+              emailInvalid ? "login-email-error" : "login-email-hint"
             }
           />
-          {fieldErrors.identifier ? (
+          {fieldErrors.email ? (
             <p
-              id="login-identifier-error"
+              id="login-email-error"
               className="auth-field-error"
               role="alert"
             >
-              {fieldErrors.identifier}
+              {fieldErrors.email}
             </p>
           ) : null}
         </div>

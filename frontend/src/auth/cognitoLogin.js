@@ -4,7 +4,7 @@ import { mapCognitoSignInError } from "./cognitoAuthErrors.js";
 
 /**
  * @param {{ username: string; password: string }} credentials
- * `username` is the Cognito username or verified email alias.
+ * `username` must be the user’s verified email (Cognito `username` parameter for email sign-in).
  */
 export async function signInWithCognito(credentials) {
   if (!isCognitoConfigured()) {
@@ -13,11 +13,15 @@ export async function signInWithCognito(credentials) {
     );
   }
 
-  const username = credentials.username.trim();
+  const loginUsername = credentials.username.trim();
   const { password } = credentials;
 
   try {
-    const output = await amplifySignIn({ username, password });
+    const output = await amplifySignIn({
+      username: loginUsername,
+      password,
+      options: { authFlowType: "USER_SRP_AUTH" },
+    });
 
     if (output.isSignedIn) {
       console.log("[AppliCache] Login successful");
@@ -25,6 +29,20 @@ export async function signInWithCognito(credentials) {
     }
 
     const step = output.nextStep?.signInStep;
+    if (step === "CONFIRM_SIGN_UP") {
+      const e = new Error(
+        "Confirm your email before signing in. Check your inbox or complete sign-up.",
+      );
+      /** @type {{ field?: string }} */ (e).field = "email";
+      throw e;
+    }
+    if (step === "RESET_PASSWORD") {
+      const e = new Error(
+        "You must reset your password before signing in. Use “Forgot password” if your app supports it.",
+      );
+      /** @type {{ field?: string }} */ (e).field = "password";
+      throw e;
+    }
     if (step && step !== "DONE") {
       console.warn(
         "[AppliCache] Sign-in requires an additional step:",
@@ -38,6 +56,10 @@ export async function signInWithCognito(credentials) {
 
     throw new Error("Sign-in did not complete.");
   } catch (err) {
+    const presetField = /** @type {{ field?: string }} */ (err)?.field;
+    if (presetField && err instanceof Error) {
+      throw err;
+    }
     const msg = err instanceof Error ? err.message : "";
     if (msg.includes("Additional sign-in step")) {
       throw err;

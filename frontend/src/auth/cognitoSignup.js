@@ -6,6 +6,11 @@ import {
 import { isCognitoConfigured } from "./amplifyConfig.js";
 import { mapCognitoAuthError } from "./cognitoAuthErrors.js";
 
+/** Aligns with Cognito pools where usernames are case-insensitive (stored/compared as lowercase). */
+function canonicalPoolUsername(username) {
+  return username.trim().toLowerCase();
+}
+
 /**
  * Register a user in Cognito (SRP-enabled app client, no secret).
  * Maps form fields to standard attributes: given_name, family_name, birthdate, email.
@@ -38,7 +43,7 @@ export async function signUp(input) {
 
   try {
     const { isSignUpComplete, userId, nextStep } = await amplifySignUp({
-      username,
+      username: canonicalPoolUsername(username),
       password,
       options: {
         userAttributes: {
@@ -83,7 +88,7 @@ export async function confirmUserSignUp(input) {
 
   try {
     await confirmSignUp({
-      username,
+      username: canonicalPoolUsername(username),
       confirmationCode: confirmationCode.trim(),
     });
   } catch (err) {
@@ -106,7 +111,9 @@ export async function resendUserVerificationCode(input) {
   }
 
   try {
-    await resendSignUpCode({ username: input.username });
+    await resendSignUpCode({
+      username: canonicalPoolUsername(input.username),
+    });
   } catch (err) {
     const { message } = mapCognitoAuthError(err);
     throw new Error(message);

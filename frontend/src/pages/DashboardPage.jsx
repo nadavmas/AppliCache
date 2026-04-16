@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { getCurrentUser } from "aws-amplify/auth";
 import { signOut } from "../auth/cognitoStub";
 
@@ -27,6 +27,21 @@ export default function DashboardPage() {
     };
   }, []);
 
+  const handleSignOut = async () => {
+    setLogoutError("");
+    setSigningOut(true);
+    try {
+      await signOut();
+      navigate("/", { replace: true });
+    } catch (err) {
+      setLogoutError(
+        err instanceof Error ? err.message : "Could not sign out. Try again.",
+      );
+    } finally {
+      setSigningOut(false);
+    }
+  };
+
   if (status === "checking") {
     return (
       <main className="landing-page">
@@ -53,10 +68,20 @@ export default function DashboardPage() {
         <p style={{ fontSize: "1rem", color: "#64748b", marginTop: 16 }}>
           Your applications overview will appear here.
         </p>
+        {logoutError ? (
+          <p className="auth-form-error" role="alert" style={{ marginTop: 16 }}>
+            {logoutError}
+          </p>
+        ) : null}
         <div className="hero-actions" style={{ marginTop: 24 }}>
-          <Link to="/" className="btn btn-secondary">
-            Marketing site
-          </Link>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={handleSignOut}
+            disabled={signingOut}
+          >
+            {signingOut ? "Signing out…" : "Log out"}
+          </button>
         </div>
       </section>
     </main>
