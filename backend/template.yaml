@@ -1,8 +1,55 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: AppliCache backend SAM template (empty scaffold)
+Description: AppliCache backend — Cognito, DynamoDB single table, Post Confirmation Lambda
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
 
 Resources:
+  AppliCacheData:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: AppliCacheData
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+
+  PostConfirmationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-PostConfirmation"
+      Description: Writes user profile to AppliCacheData after Cognito post-confirmation
+      Runtime: nodejs20.x
+      Handler: index.handler
+      CodeUri: functions/postConfirmation/
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref AppliCacheData
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+              Resource: !GetAtt AppliCacheData.Arn
+
+  PostConfirmationInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref PostConfirmationFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt CognitoUserPool.Arn
+
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
@@ -11,6 +58,8 @@ Resources:
         - email
       AutoVerifiedAttributes:
         - email
+      LambdaConfig:
+        PostConfirmation: !GetAtt PostConfirmationFunction.Arn
       Policies:
         PasswordPolicy:
           MinimumLength: 8
@@ -48,3 +97,22 @@ Resources:
         - ALLOW_USER_SRP_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
       PreventUserExistenceErrors: ENABLED
+
+Outputs:
+  AppliCacheDataTableName:
+    Description: Single-table DynamoDB name (PK/SK)
+    Value: !Ref AppliCacheData
+    Export:
+      Name: !Sub "${AWS::StackName}-AppliCacheDataTableName"
+
+  AppliCacheDataTableArn:
+    Description: ARN of the AppliCacheData table
+    Value: !GetAtt AppliCacheData.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-AppliCacheDataTableArn"
+
+  PostConfirmationFunctionArn:
+    Description: Post Confirmation Lambda ARN
+    Value: !GetAtt PostConfirmationFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-PostConfirmationFunctionArn"
