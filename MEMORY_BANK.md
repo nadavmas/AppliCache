@@ -121,7 +121,9 @@ Update this section only when explicitly requested.
 | **Dashboard UI (boards)**: shared **`.dashboard-accent-btn`** (same accent text treatment as sidebar “Create new table”) for **Create** (draft save) and **Start adding entries**; **unboxed** draft save and entries-gate sections (top divider only, no card); primary copy **“Press Create and start caching your applications!”**; duplicate draft hint under the grid removed. | 2026-04-16 | `styles.css`, `DashboardPage`, `BoardTableView`. |
 | **Board row entries (DynamoDB)**: **`POST /boards/{boardId}/entries`** on API Gateway (same Cognito authorizer); **`dynamodb:UpdateItem`** on `BoardsFunction`. Lambda loads board via **`GetItem`**, validates **`cells`** keys match the board’s column ids exactly (no missing/extra keys), appends one element to **`rows`** with **`UpdateItem`** + **`list_append`**, each stored row **`{ rowId, cells, createdAt, updatedAt }`**; board **`updatedAt`** refreshed. **`mapRowForApi`** maps **`rowId`** or **`id`** for **`GET`** DTOs. **`201`** returns **`{ row: { id, cells, … }, updatedAt }`**. | 2026-04-17 | `backend/template.yaml`, `backend/functions/boards/index.js`. |
 | **Board entries (SPA)**: **`addBoardEntry(boardId, { cells })`** in **`boardsApi.js`** (Bearer + JSON). Client rows use **`pendingSave`** for drafts; **Save** / **Enter** submit; failed API keeps draft + inline error + retry; success merges server **`row`** locally (no refetch flicker). **`boardFromServer`**: **`entriesEnabled: true`** when **`rows.length > 0`** so boards with data skip the “Start adding entries” gate; gate only for **persisted + no rows + not yet enabled**. Table: empty **Save** column header, read-only cells for saved rows. | 2026-04-17 | `frontend/src/api/boardsApi.js`, `boardUtils.js`, `BoardTableView.jsx`, `DashboardPage.jsx`. |
-| **Edit board entries**: **`PATCH /boards/{boardId}/entries/{rowId}`** (API Gateway + boards Lambda): **`GetItem`**, find row by **`rowId`** / **`id`**, **`normalizeCellsForBoard`**, **`UpdateItem`** **`SET`** **`rows`** + board **`updatedAt`**; **`200`** **`{ row, updatedAt }`**. CORS / GatewayResponses include **`PATCH`**. SPA: **`updateBoardEntry`**, **`editingRowId`** + **`originalEditRowData`** snapshot cancel, **`handleUpdateRow`**, inline **Edit** (row hover / focus), **Save** / **Cancel**, **Escape** / **Enter**, **`saveEntryError`** shared. | 2026-04-17 | `backend/template.yaml`, `backend/functions/boards/index.js`, `frontend/src/api/boardsApi.js`, `DashboardPage.jsx`, `BoardTableView.jsx`, `styles.css`. |
+| **Edit board entries (PATCH)**: **`PATCH /boards/{boardId}/entries/{rowId}`** — API Gateway event **`UpdateBoardEntry`**; **`AllowMethods`** / **`Access-Control-Allow-Methods`** extended with **`PATCH`** on **`Cors`** and **`DEFAULT_4XX` / `DEFAULT_5XX`**. Lambda: read–modify–write — **`GetItem`**, locate row by **`rowId`** or legacy **`id`**, **`normalizeCellsForBoard`** (same rules as POST), replace row in **`rows`** array, **`UpdateItem`** **`SET`** **`#rows`**, **`#updatedAt`**; **`200`** **`{ row: { id, cells, createdAt, updatedAt }, updatedAt }`**. **`corsHeaders`** include **`PATCH`**. IAM unchanged (**`GetItem`** / **`UpdateItem`** already granted). SPA: **`updateBoardEntry`**, **`editingRowId`** + **`originalEditRowData`** snapshot for cancel, **`handleStartEditRow`** (revert prior row when switching edit target; block while **`savingEntryRowId`**), **`handleCancelEdit`**, **`handleUpdateRow`**, **`handleCellChange`** for drafts and active edit row; clear edit snapshot when **`activeBoardId`** changes; **`saveEntryError`** for add + update failures. **`BoardTableView`**: unified **`showRowActionsColumn`** (draft **Save** and/or saved-row actions), read-only vs edit vs draft rows, **Save** / **Cancel** in edit mode, **Escape** / **Enter** on edit inputs, disabled while **`savingRowId`** matches row. Styles: **`.board-table__tr--interactive`**, **`.board-table__edit-btn`**, **`.board-table__edit-actions`**, **`.board-table__cancel-edit`**, hover / **`focus-within`** / **`focus-visible`** for discoverability. | 2026-04-17 | `backend/template.yaml`, `backend/functions/boards/index.js`, `frontend/src/api/boardsApi.js`, `DashboardPage.jsx`, `BoardTableView.jsx`, `styles.css`. |
+| **Board entry table: width follows columns; Edit as icon**: **`board-table-wrap`** and **`board-table-scroll`**: **`width: fit-content`**, **`max-width: 100%`** so the bordered table area sizes to column content instead of stretching the full dashboard column; **`board-table`**: **`width: auto`**, **`table-layout: auto`**. **`board-table__th--action`**: **`min-width`** reduced (e.g. **3rem**) so the actions column stays compact when only the edit control shows; column still grows for **Save** / **Save + Cancel**. **Edit** control: inline **square-pen** SVG (**`BoardEditIcon`**, **`stroke="currentColor"`**), visible label removed; **`aria-label`** on the button keeps **“Edit row …”** for assistive tech. | 2026-04-17 | `BoardTableView.jsx`, `styles.css`. |
+| **Delete board entries**: **`DELETE /boards/{boardId}/entries/{rowId}`** — SAM **`DeleteBoardEntry`**; CORS / **`GatewayResponses`** include **`DELETE`**. Lambda: **`GetItem`**, filter **`rows`** by **`rowId`** / **`id`**, **`404`** if board or row missing, **`UpdateItem`** **`SET`** **`rows`** + **`updatedAt`**, **`200`** **`{ updatedAt }`**. SPA: **`deleteBoardEntry`**, **`deletingRowId`**, **`window.confirm`**, local row removal; trash icon (**`BoardDeleteIcon`**) beside edit, red hover (**.board-table__delete-btn**); **`focusAfterDelete`** + **`requestAnimationFrame`** focus next row actions / **Add New Entry** / table region. | 2026-04-17 | `backend/template.yaml`, `backend/functions/boards/index.js`, `frontend/src/api/boardsApi.js`, `DashboardPage.jsx`, `BoardTableView.jsx`, `styles.css`. |
 
 ### Recent work log (since last backlog snapshot)
 
@@ -164,10 +166,43 @@ Entries below mirror the table above in narrative form for quick scanning.
 - **Frontend**: **`addBoardEntry`**; draft rows (**`pendingSave`**) with **Save** (`.dashboard-accent-btn`), **Saving…**, **Enter** to save, **`role="alert"`** error on failure; **`handleCellChange`** only for draft rows; **`+ Add New Entry`** unchanged flow.
 - **UX**: **`boardFromServer`** sets **`entriesEnabled`** when the server returns rows so existing data doesn’t require the entries gate; **“Start adding entries”** only when the persisted board has **no rows** and entry mode isn’t on yet.
 
-**2026-04-17 — Edit / PATCH board row entries**
+**2026-04-17 — Board entry handling after POST entries (PATCH, inline edit, layout, icon)**
 
-- **`PATCH /boards/{boardId}/entries/{rowId}`**: read–modify–write on the board item’s **`rows`** list; CORS allows **`PATCH`** on success and gateway error responses.
-- **Dashboard**: **`updateBoardEntry`**, per-row **Edit** (revealed on row hover or keyboard focus), **Save** / **Cancel** in edit mode, snapshot revert on cancel or when switching to another row’s edit, **Escape** / **Enter** while editing.
+Work in this stream builds on **`POST /boards/{boardId}/entries`** (documented above). Together these cover full **create + update** for board row entries.
+
+- **API / IaC (PATCH)**  
+  - New route **`PATCH /boards/{boardId}/entries/{rowId}`** on the existing REST API, same Cognito authorizer as other board routes.  
+  - **CORS**: **`GET,POST,PATCH,OPTIONS`** on the API **`Cors`** config and on **`GatewayResponses`** (**`DEFAULT_4XX`** / **`DEFAULT_5XX`**) so browsers get **`PATCH`** and preflight/error responses correctly.
+
+- **Lambda (`boards/index.js`)**  
+  - **`PATCH`**: parse **`boardId`** / **`rowId`**, require JSON **`cells`**, **`GetItem`** the board, **`404`** if missing, **`normalizeCellsForBoard`** → **`400`** on validation mismatch, find existing row by **`rowId`** or **`id`**, **`404`** if not found, merge updated row (preserve **`createdAt`**, set **`updatedAt`**), **`UpdateItem`** with new **`rows`** list and board **`updatedAt`**, **`200`** with **`row`** + board **`updatedAt`** aligned with POST entry response shape.
+
+- **Frontend API**  
+  - **`updateBoardEntry(boardId, rowId, { cells })`**: **`PATCH`**, Bearer id token, **`401`** / **`404`** / shared error parsing like **`addBoardEntry`**.
+
+- **Dashboard (`DashboardPage.jsx`)**  
+  - State: **`editingRowId`**, **`originalEditRowData`** (`{ rowId, cells }`) for cancel and for reverting when starting edit on a different row.  
+  - **`useEffect` on `activeBoardId`**: clears edit state and entry error when switching boards.  
+  - **`handleCellChange`**: allows edits for **`pendingSave`** draft rows or for the row whose **`id`** matches **`editingRowId`**.  
+  - **`handleUpdateRow`**: builds **`cells`** from current column ids, calls **`updateBoardEntry`**, merges **`data.row`** on success, clears edit state; uses **`savingEntryRowId`** (shared with new-row save).  
+  - **`handleStartEditRow`**: does not run while a row save is in flight; snapshots **`cells`** for cancel; restores the previously edited row from **`originalEditRowData`** when changing which row is being edited.
+
+- **`BoardTableView`**  
+  - **`showRowActionsColumn`** when the board is persisted, entries are enabled, and there is at least one row (covers draft-only **Save**, saved-row **Edit**, and mixed).  
+  - Saved rows: **Edit** control (later an icon only), **Enter** / **Escape** on inputs in edit mode, **Save** / **Cancel** while editing, **Saving…** and disabled inputs when that row is saving.
+
+- **Styles (first pass for PATCH/edit)**  
+  - Row hover / keyboard **focus-within** reveals the edit control; **`.board-table__edit-actions`**, **`.board-table__cancel-edit`**, focus rings for accessibility.
+
+- **Styles (layout + edit control)**  
+  - Table “box” (**`board-table-wrap`**, **`board-table-scroll`**) uses **`width: fit-content`** and **`max-width: 100%`** so overall width tracks the number of columns and cell content instead of always filling the main column.  
+  - **`board-table`**: **`width: auto`** (no forced full width).  
+  - Actions header **`min-width`** tuned so icon-only rows stay narrow; **`BoardEditIcon`**: small square-pen SVG, **`aria-hidden`**, button **`aria-label`** carries the edit action name.
+
+**2026-04-17 — Delete board row entries**
+
+- **`DELETE /boards/{boardId}/entries/{rowId}`** removes one row from the board item’s **`rows`** list; CORS allows **`DELETE`** on gateway error responses.
+- **Dashboard**: **`deleteBoardEntry`**, **`handleDeleteRow`** with confirm, **`deletingRowId`** loading state, **`focusAfterDelete`** for **`focusAfterDeleteComplete`**; **`BoardTableView`** trash + edit row actions, **`data-board-row-index`** for focus target, **`tabIndex={-1}`** on **`board-table-scroll`** as fallback; when **`entriesEnabled`** and no rows, header-only table plus **+ Add New Entry**.
 
 ## Update Policy
 

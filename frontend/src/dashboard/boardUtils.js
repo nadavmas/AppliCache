@@ -177,3 +177,19 @@ export const updateCell = (board, rowId, columnId, value) => ({
         },
   ),
 })
+
+/** Shown when Save is blocked because every cell is blank (add or edit entry). */
+export const ENTRY_SAVE_REQUIRES_FILLED_FIELD_MESSAGE =
+  "At least one field must be filled in."
+
+/**
+ * True if at least one cell has non-whitespace content (save validation).
+ * @param {Record<string, string>} cells
+ * @returns {boolean}
+ */
+export const entryCellsHaveAtLeastOneFilledValue = (cells) => {
+  if (!cells || typeof cells !== "object") return false
+  return Object.values(cells).some(
+    (v) => typeof v === "string" && v.trim().length > 0,
+  )
+}

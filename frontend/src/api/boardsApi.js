@@ -232,3 +232,38 @@ export const updateBoardEntry = async (boardId, rowId, entryData) => {
   }
   return res.json()
 }
+
+/**
+ * Remove a row from a board (DELETE).
+ * @param {string} boardId
+ * @param {string} rowId
+ * @returns {Promise<{ updatedAt: string }>}
+ */
+export const deleteBoardEntry = async (boardId, rowId) => {
+  const base = getBaseUrl()
+  if (!base) {
+    throw new Error("VITE_API_URL is not set")
+  }
+  const idToken = await getIdToken()
+  if (!idToken) {
+    throw new Error("Not signed in")
+  }
+  const b = encodeURIComponent(boardId)
+  const r = encodeURIComponent(rowId)
+  const res = await fetch(`${base}/boards/${b}/entries/${r}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+    },
+  })
+  if (res.status === 401) {
+    throw new Error("Session expired. Please sign in again.")
+  }
+  if (res.status === 404) {
+    throw new Error("Table or entry not found.")
+  }
+  if (!res.ok) {
+    throw new Error(await parseErrorBody(res))
+  }
+  return res.json()
+}

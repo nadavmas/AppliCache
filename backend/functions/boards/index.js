@@ -18,7 +18,7 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": CORS_ORIGIN,
   "Access-Control-Allow-Headers":
     "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
-  "Access-Control-Allow-Methods": "OPTIONS,GET,POST,PATCH",
+  "Access-Control-Allow-Methods": "OPTIONS,GET,POST,PATCH,DELETE",
 }
 
 const json = (statusCode, body) => ({
@@ -95,6 +95,13 @@ const normalizeCellsForBoard = (columns, cellsRaw) => {
     out[id] = v == null ? "" : String(v)
   }
   return { ok: true, cells: out }
+}
+
+/** At least one column value must be non-empty after trim (no all-blank saves). */
+const cellsHaveAtLeastOneNonWhitespaceValue = (cells) => {
+  return Object.values(cells).some(
+    (v) => typeof v === "string" && v.trim().length > 0,
+  )
 }
 
 /** Map DynamoDB row to API row shape */
@@ -241,6 +248,11 @@ exports.handler = async (event) => {
       const normalized = normalizeCellsForBoard(columns, cellsPayload)
       if (!normalized.ok) {
         return json(400, { message: normalized.message })
+      }
+      if (!cellsHaveAtLeastOneNonWhitespaceValue(normalized.cells)) {
+        return json(400, {
+          message: "At least one field must be filled in.",
+        })
       }
 
       const rowId = randomUUID()
@@ -394,6 +406,11 @@ exports.handler = async (event) => {
     if (!normalized.ok) {
       return json(400, { message: normalized.message })
     }
+    if (!cellsHaveAtLeastOneNonWhitespaceValue(normalized.cells)) {
+      return json(400, {
+        message: "At least one field must be filled in.",
+      })
+    }
 
     const rawRows = Array.isArray(boardRow.rows) ? boardRow.rows : []
     const rowIndex = rawRows.findIndex((r) => {
@@ -468,6 +485,85 @@ exports.handler = async (event) => {
       },
       updatedAt: now,
     })
+  }
+
+  if (method === "DELETE") {
+    const pathBoardId =
+      event.pathParameters?.boardId != null
+        ? String(event.pathParameters.boardId).trim()
+        : ""
+    const pathRowId =
+      event.pathParameters?.rowId != null
+        ? String(event.pathParameters.rowId).trim()
+        : ""
+
+    if (!pathBoardId || !pathRowId) {
+      return json(400, { message: "boardId and rowId are required" })
+    }
+
+    const getRes = await client.send(
+      new GetItemCommand({
+        TableName: tableName,
+        Key: marshall({
+          PK: pk,
+          SK: `BOARD#${pathBoardId}`,
+        }),
+      }),
+    )
+    if (!getRes.Item) {
+      return json(404, { message: "Board not found" })
+    }
+    const boardRow = unmarshall(getRes.Item)
+    if (!String(boardRow.SK ?? "").startsWith("BOARD#")) {
+      return json(404, { message: "Board not found" })
+    }
+
+    const rawRows = Array.isArray(boardRow.rows) ? boardRow.rows : []
+    const filteredRows = rawRows.filter((r) => {
+      if (!r || typeof r !== "object") return true
+      const rid =
+        typeof r.rowId === "string"
+          ? r.rowId
+          : typeof r.id === "string"
+            ? r.id
+            : null
+      return rid !== pathRowId
+    })
+
+    if (filteredRows.length === rawRows.length) {
+      return json(404, { message: "Entry not found" })
+    }
+
+    const now = new Date().toISOString()
+
+    try {
+      await client.send(
+        new UpdateItemCommand({
+          TableName: tableName,
+          Key: marshall({
+            PK: pk,
+            SK: `BOARD#${pathBoardId}`,
+          }),
+          UpdateExpression: "SET #rows = :rows, #updatedAt = :u",
+          ExpressionAttributeNames: {
+            "#rows": "rows",
+            "#updatedAt": "updatedAt",
+          },
+          ExpressionAttributeValues: marshall({
+            ":rows": filteredRows,
+            ":u": now,
+          }),
+          ConditionExpression: "attribute_exists(PK) AND attribute_exists(SK)",
+        }),
+      )
+    } catch (e) {
+      if (e.name === "ConditionalCheckFailedException") {
+        return json(404, { message: "Board not found" })
+      }
+      throw e
+    }
+
+    return json(200, { updatedAt: now })
   }
 
   return json(405, { message: "Method not allowed" })

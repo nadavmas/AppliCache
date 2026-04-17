@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { getCurrentUser } from "aws-amplify/auth";
 import { signOut } from "../auth/cognitoStub";
 import {
   addBoardEntry,
   createBoard,
+  deleteBoardEntry,
   getBoard,
   isBoardsApiConfigured,
   listBoards,
@@ -17,6 +18,8 @@ import {
   addRowToBoard,
   boardFromServer,
   createEmptyBoard,
+  ENTRY_SAVE_REQUIRES_FILLED_FIELD_MESSAGE,
+  entryCellsHaveAtLeastOneFilledValue,
   updateCell,
 } from "../dashboard/boardUtils";
 
@@ -44,6 +47,13 @@ export default function DashboardPage() {
 
   const [editingRowId, setEditingRowId] = useState(null);
   const [originalEditRowData, setOriginalEditRowData] = useState(null);
+
+  const [deletingRowId, setDeletingRowId] = useState(null);
+  const [focusAfterDelete, setFocusAfterDelete] = useState(null);
+
+  const handleFocusAfterDeleteComplete = useCallback(() => {
+    setFocusAfterDelete(null);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -110,6 +120,7 @@ export default function DashboardPage() {
     setSaveEntryError("");
     setEditingRowId(null);
     setOriginalEditRowData(null);
+    setFocusAfterDelete(null);
   }, [activeBoardId]);
 
   const handleSelectBoard = (boardId) => {
@@ -281,6 +292,7 @@ export default function DashboardPage() {
   const handleStartEditRow = (rowId) => {
     if (!activeBoardId) return;
     if (savingEntryRowId) return;
+    if (deletingRowId) return;
     const board = boards.find((b) => b.id === activeBoardId);
     const row = board?.rows.find((r) => r.id === rowId);
     if (!board?.persisted || !row || row.pendingSave) return;
@@ -348,11 +360,17 @@ export default function DashboardPage() {
     if (!row || row.pendingSave) return;
 
     setSaveEntryError("");
-    setSavingEntryRowId(rowId);
 
     const cells = Object.fromEntries(
       board.columns.map((c) => [c.id, row.cells[c.id] ?? ""]),
     );
+
+    if (!entryCellsHaveAtLeastOneFilledValue(cells)) {
+      setSaveEntryError(ENTRY_SAVE_REQUIRES_FILLED_FIELD_MESSAGE);
+      return;
+    }
+
+    setSavingEntryRowId(rowId);
 
     updateBoardEntry(board.id, rowId, { cells })
       .then((data) => {
@@ -397,11 +415,17 @@ export default function DashboardPage() {
     if (!row?.pendingSave) return;
 
     setSaveEntryError("");
-    setSavingEntryRowId(rowId);
 
     const cells = Object.fromEntries(
       board.columns.map((c) => [c.id, row.cells[c.id] ?? ""]),
     );
+
+    if (!entryCellsHaveAtLeastOneFilledValue(cells)) {
+      setSaveEntryError(ENTRY_SAVE_REQUIRES_FILLED_FIELD_MESSAGE);
+      return;
+    }
+
+    setSavingEntryRowId(rowId);
 
     addBoardEntry(board.id, { cells })
       .then((data) => {
@@ -432,6 +456,50 @@ export default function DashboardPage() {
       })
       .finally(() => {
         setSavingEntryRowId(null);
+      });
+  };
+
+  const handleDeleteRow = (rowId) => {
+    if (!activeBoardId || !isBoardsApiConfigured()) return;
+    if (savingEntryRowId || deletingRowId) return;
+    const board = boards.find((b) => b.id === activeBoardId);
+    if (!board?.persisted || !board.entriesEnabled) return;
+    const deletedIndex = board.rows.findIndex((r) => r.id === rowId);
+    if (deletedIndex < 0) return;
+    if (
+      !window.confirm("Are you sure you want to delete this entry?")
+    ) {
+      return;
+    }
+
+    setSaveEntryError("");
+    setDeletingRowId(rowId);
+
+    deleteBoardEntry(board.id, rowId)
+      .then(() => {
+        setBoards((prev) =>
+          prev.map((b) => {
+            if (b.id !== board.id) return b;
+            return {
+              ...b,
+              rows: b.rows.filter((r) => r.id !== rowId),
+            };
+          }),
+        );
+        if (editingRowId === rowId) {
+          setEditingRowId(null);
+          setOriginalEditRowData(null);
+        }
+        setFocusAfterDelete({ deletedIndex });
+        setSaveEntryError("");
+      })
+      .catch((err) => {
+        setSaveEntryError(
+          err instanceof Error ? err.message : "Could not delete entry.",
+        );
+      })
+      .finally(() => {
+        setDeletingRowId(null);
       });
   };
 
@@ -522,6 +590,10 @@ export default function DashboardPage() {
                 onStartEditRow={handleStartEditRow}
                 onCancelEdit={handleCancelEdit}
                 onUpdateRow={handleUpdateRow}
+                deletingRowId={deletingRowId}
+                onDeleteRow={handleDeleteRow}
+                focusAfterDelete={focusAfterDelete}
+                onFocusAfterDeleteComplete={handleFocusAfterDeleteComplete}
               />
               {showDraftSaveBar ? (
                 <div

@@ -1240,7 +1240,7 @@ button.auth-link {
   min-height: 2rem;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: var(--accent);
+  color: var(--muted);
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
@@ -1248,6 +1248,7 @@ button.auth-link {
 }
 
 .board-table__edit-btn:hover:not(:disabled) {
+  color: var(--accent);
   background: rgba(59, 130, 246, 0.08);
   border-color: rgba(148, 163, 184, 0.35);
 }
@@ -1260,6 +1261,75 @@ button.auth-link {
 .board-table__edit-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.board-table__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.board-table__tr--interactive .board-table__delete-btn {
+  opacity: 0;
+  transition:
+    opacity var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-table__tr--interactive .board-table__delete-btn {
+    transition: none;
+  }
+}
+
+.board-table__tr--interactive:hover .board-table__delete-btn,
+.board-table__tr--interactive:focus-within .board-table__delete-btn,
+.board-table__tr--interactive .board-table__delete-btn:focus-visible {
+  opacity: 1;
+}
+
+.board-table__delete-icon {
+  display: block;
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+}
+
+.board-table__delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px;
+  min-width: 2rem;
+  min-height: 2rem;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.board-table__delete-btn:hover:not(:disabled) {
+  color: rgb(185, 28, 28);
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(248, 113, 113, 0.45);
+}
+
+.board-table__delete-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.board-table__delete-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.board-table-scroll:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .board-table__edit-actions {

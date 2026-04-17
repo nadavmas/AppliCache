@@ -1,4 +1,8 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import {
+  ENTRY_SAVE_REQUIRES_FILLED_FIELD_MESSAGE,
+  entryCellsHaveAtLeastOneFilledValue,
+} from "../dashboard/boardUtils"
 
 /** Square-pen style edit icon (stroke matches button via currentColor) */
 const BoardEditIcon = () => (
@@ -15,6 +19,27 @@ const BoardEditIcon = () => (
   >
     <path d="M12 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2v-7" />
     <path d="M18.375 2.625a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.375-9.375z" />
+  </svg>
+)
+
+/** Trash icon for row delete (stroke matches button via currentColor) */
+const BoardDeleteIcon = () => (
+  <svg
+    className="board-table__delete-icon"
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M3 6h18" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <path d="M10 11v6" />
+    <path d="M14 11v6" />
   </svg>
 )
 
@@ -35,6 +60,10 @@ const BoardEditIcon = () => (
  * @param {(rowId: string) => void} [props.onStartEditRow]
  * @param {() => void} [props.onCancelEdit]
  * @param {(rowId: string) => void} [props.onUpdateRow]
+ * @param {string | null} [props.deletingRowId]
+ * @param {(rowId: string) => void} [props.onDeleteRow]
+ * @param {{ deletedIndex: number } | null} [props.focusAfterDelete]
+ * @param {() => void} [props.onFocusAfterDeleteComplete]
  */
 export default function BoardTableView({
   board,
@@ -52,10 +81,16 @@ export default function BoardTableView({
   onStartEditRow,
   onCancelEdit,
   onUpdateRow,
+  deletingRowId,
+  onDeleteRow,
+  focusAfterDelete,
+  onFocusAfterDeleteComplete,
 }) {
   const [isAddingColumn, setIsAddingColumn] = useState(false)
   const [newColumnName, setNewColumnName] = useState("")
   const columnCancelRef = useRef(false)
+  const tableScrollRef = useRef(null)
+  const addRowButtonRef = useRef(null)
 
   const showAddColumn = !columnsLocked
   /** Show entry rows / Add row when entry mode is on or the board already has saved rows */
@@ -68,6 +103,41 @@ export default function BoardTableView({
   /** Draft Save and/or saved-row Edit / edit Save+Cancel */
   const showRowActionsColumn =
     Boolean(persisted) && entriesEnabled && board.rows.length > 0
+
+  useEffect(() => {
+    if (!focusAfterDelete) return
+    const { deletedIndex } = focusAfterDelete
+    const raf = requestAnimationFrame(() => {
+      const newCount = board.rows.length
+      let focused = false
+      if (newCount > 0) {
+        const nextFocusIndex = Math.min(deletedIndex, newCount - 1)
+        const tr = tableScrollRef.current?.querySelector(
+          `tr[data-board-row-index="${nextFocusIndex}"]`,
+        )
+        const actions = tr?.querySelector(".board-table__row-actions")
+        const firstBtn = actions?.querySelector("button")
+        if (firstBtn) {
+          firstBtn.focus()
+          focused = true
+        } else {
+          const inp = tr?.querySelector(".board-table__cell-input")
+          if (inp) {
+            inp.focus()
+            focused = true
+          }
+        }
+      } else {
+        addRowButtonRef.current?.focus()
+        focused = document.activeElement === addRowButtonRef.current
+      }
+      if (!focused) {
+        tableScrollRef.current?.focus()
+      }
+      onFocusAfterDeleteComplete?.()
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [focusAfterDelete, board.rows, onFocusAfterDeleteComplete])
 
   const finishColumnInput = (value) => {
     const trimmed = value.trim()
@@ -128,13 +198,24 @@ export default function BoardTableView({
   }
 
   const handleStartEditClick = (rowId) => () => {
-    if (savingRowId != null || !onStartEditRow) return
+    if (savingRowId != null || deletingRowId != null || !onStartEditRow) return
     onStartEditRow(rowId)
+  }
+
+  const handleDeleteClick = (rowId) => () => {
+    if (savingRowId != null || deletingRowId != null || !onDeleteRow) return
+    onDeleteRow(rowId)
   }
 
   return (
     <div className="board-table-wrap board-table-wrap--appear">
-      <div className="board-table-scroll">
+      <div
+        className="board-table-scroll"
+        ref={tableScrollRef}
+        tabIndex={-1}
+        role="region"
+        aria-label="Board entries table"
+      >
         <table className="board-table">
           <thead>
             <tr>
@@ -181,15 +262,20 @@ export default function BoardTableView({
               ) : null}
             </tr>
           </thead>
-          <tbody>
-            {entriesVisible
-              ? board.rows.map((row, rowIndex) => {
+          {entriesVisible && board.rows.length > 0 ? (
+            <tbody>
+              {board.rows.map((row, rowIndex) => {
                   const isDraft = row.pendingSave === true
                   const isEditing =
                     !isDraft &&
                     editingRowId != null &&
                     editingRowId === row.id
                   const rowSaving = savingRowId === row.id
+                  const cellsPayload = Object.fromEntries(
+                    board.columns.map((c) => [c.id, row.cells[c.id] ?? ""]),
+                  )
+                  const canSaveEntry =
+                    entryCellsHaveAtLeastOneFilledValue(cellsPayload)
                   const showInputs = isDraft || isEditing
                   const trClass = [
                     "board-table__tr",
@@ -201,7 +287,11 @@ export default function BoardTableView({
                     .join(" ")
 
                   return (
-                    <tr key={row.id} className={trClass}>
+                    <tr
+                      key={row.id}
+                      className={trClass}
+                      data-board-row-index={rowIndex}
+                    >
                       {board.columns.map((col) => (
                         <td key={col.id} className="board-table__td">
                           {showInputs ? (
@@ -243,7 +333,15 @@ export default function BoardTableView({
                               type="button"
                               className="dashboard-accent-btn"
                               onClick={handleSaveClick(row.id)}
-                              disabled={savingRowId != null}
+                              disabled={
+                                savingRowId != null ||
+                                (!rowSaving && !canSaveEntry)
+                              }
+                              title={
+                                !rowSaving && !canSaveEntry
+                                  ? ENTRY_SAVE_REQUIRES_FILLED_FIELD_MESSAGE
+                                  : undefined
+                              }
                               aria-busy={rowSaving ? "true" : undefined}
                               aria-label={`Save row ${rowIndex + 1}`}
                             >
@@ -255,7 +353,15 @@ export default function BoardTableView({
                                 type="button"
                                 className="dashboard-accent-btn"
                                 onClick={handleUpdateClick(row.id)}
-                                disabled={savingRowId != null}
+                                disabled={
+                                  savingRowId != null ||
+                                  (!rowSaving && !canSaveEntry)
+                                }
+                                title={
+                                  !rowSaving && !canSaveEntry
+                                    ? ENTRY_SAVE_REQUIRES_FILLED_FIELD_MESSAGE
+                                    : undefined
+                                }
                                 aria-busy={rowSaving ? "true" : undefined}
                                 aria-label={`Save changes row ${rowIndex + 1}`}
                               >
@@ -272,27 +378,45 @@ export default function BoardTableView({
                               </button>
                             </div>
                           ) : (
-                            <button
-                              type="button"
-                              className="board-table__edit-btn"
-                              onClick={handleStartEditClick(row.id)}
-                              disabled={savingRowId != null}
-                              aria-label={`Edit row ${rowIndex + 1}`}
-                            >
-                              <BoardEditIcon />
-                            </button>
+                            <div className="board-table__row-actions">
+                              <button
+                                type="button"
+                                className="board-table__edit-btn"
+                                onClick={handleStartEditClick(row.id)}
+                                disabled={
+                                  savingRowId != null || deletingRowId != null
+                                }
+                                aria-label={`Edit row ${rowIndex + 1}`}
+                              >
+                                <BoardEditIcon />
+                              </button>
+                              <button
+                                type="button"
+                                className="board-table__delete-btn"
+                                onClick={handleDeleteClick(row.id)}
+                                disabled={
+                                  savingRowId != null || deletingRowId != null
+                                }
+                                aria-busy={
+                                  deletingRowId === row.id ? "true" : undefined
+                                }
+                                aria-label={`Delete row ${rowIndex + 1}`}
+                              >
+                                <BoardDeleteIcon />
+                              </button>
+                            </div>
                           )}
                         </td>
                       ) : null}
                     </tr>
                   )
-                })
-              : null}
-          </tbody>
+                })}
+            </tbody>
+          ) : null}
         </table>
       </div>
 
-      {saveRowError && showRowActionsColumn ? (
+      {saveRowError && persisted && entriesEnabled ? (
         <p className="auth-form-error board-table__save-error" role="alert">
           {saveRowError}
         </p>
@@ -318,6 +442,7 @@ export default function BoardTableView({
         <button
           type="button"
           className="board-table__add-row btn btn-secondary"
+          ref={addRowButtonRef}
           onClick={onAddRow}
         >
           + Add New Entry

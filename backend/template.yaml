@@ -104,7 +104,7 @@ Resources:
       Name: !Sub "${AWS::StackName}-rest"
       StageName: Prod
       Cors:
-        AllowMethods: "'GET,POST,PATCH,OPTIONS'"
+        AllowMethods: "'GET,POST,PATCH,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
         AllowOrigin: "'http://localhost:5173'"
       Auth:
@@ -122,13 +122,13 @@ Resources:
             Headers:
               Access-Control-Allow-Origin: "'http://localhost:5173'"
               Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              Access-Control-Allow-Methods: "'GET,POST,PATCH,OPTIONS'"
+              Access-Control-Allow-Methods: "'GET,POST,PATCH,DELETE,OPTIONS'"
         DEFAULT_5XX:
           ResponseParameters:
             Headers:
               Access-Control-Allow-Origin: "'http://localhost:5173'"
               Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              Access-Control-Allow-Methods: "'GET,POST,PATCH,OPTIONS'"
+              Access-Control-Allow-Methods: "'GET,POST,PATCH,DELETE,OPTIONS'"
 
   BoardsFunction:
     Type: AWS::Serverless::Function
@@ -181,6 +181,12 @@ Resources:
             RestApiId: !Ref ApplicacheRestApi
             Path: /boards/{boardId}/entries/{rowId}
             Method: PATCH
+        DeleteBoardEntry:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApplicacheRestApi
+            Path: /boards/{boardId}/entries/{rowId}
+            Method: DELETE
 
 Outputs:
   AppliCacheDataTableName:
