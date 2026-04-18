@@ -8,6 +8,7 @@ const {
 } = require("@aws-sdk/client-dynamodb")
 const { marshall, unmarshall } = require("@aws-sdk/util-dynamodb")
 const { randomUUID } = require("crypto")
+const { handleSmartCache } = require("./smartCache")
 
 const client = new DynamoDBClient({})
 
@@ -251,6 +252,26 @@ exports.handler = async (event) => {
     }
 
     if (pathBoardId) {
+      const resourceStr =
+        event.resource != null ? String(event.resource) : ""
+      const pathStr = event.path != null ? String(event.path) : ""
+      if (
+        resourceStr.includes("smart-cache") ||
+        pathStr.includes("/smart-cache")
+      ) {
+        return handleSmartCache({
+          client,
+          tableName,
+          pk,
+          pathBoardId,
+          payload,
+          json,
+          sanitizeColumns,
+          normalizeCellsForBoard,
+          cellsHaveAtLeastOneNonWhitespaceValue,
+        })
+      }
+
       const cellsPayload = payload.cells
       if (
         !cellsPayload ||

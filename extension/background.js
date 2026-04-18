@@ -1,9 +1,5 @@
 importScripts("config.js");
 
-chrome.runtime.onInstalled.addListener(() => {
-  console.log("AppliCache Extension Installed");
-});
-
 const AUTH_SYNC_TYPE = "APPLICACHE_AUTH_SYNC";
 
 const STORAGE_KEYS = {

@@ -52,16 +52,21 @@ async function parseErrorBody(res) {
 }
 
 /**
- * @param {"error"|"success"|"neutral"} kind
+ * @param {"error"|"success"|"neutral"|"warning"} kind
  * @param {string} text
  */
 function setCacheStatus(kind, text) {
   const el = document.getElementById("cache-status");
   if (!el) return;
   el.textContent = text;
-  el.classList.remove("cache-status--error", "cache-status--success");
+  el.classList.remove(
+    "cache-status--error",
+    "cache-status--success",
+    "cache-status--warning",
+  );
   if (kind === "error") el.classList.add("cache-status--error");
   else if (kind === "success") el.classList.add("cache-status--success");
+  else if (kind === "warning") el.classList.add("cache-status--warning");
 }
 
 function resetBoardSelect() {
@@ -72,6 +77,87 @@ function resetBoardSelect() {
   opt.value = "";
   opt.textContent = "Select a board…";
   boardSelect.appendChild(opt);
+}
+
+/**
+ * @param {string | undefined} url
+ * @returns {boolean}
+ */
+function isLinkedInJobPageUrl(url) {
+  if (!url || typeof url !== "string") return false;
+  try {
+    const u = new URL(url);
+    if (u.hostname !== "www.linkedin.com") return false;
+    return u.pathname.includes("/jobs/");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * @returns {Promise<Record<string, unknown>>}
+ */
+function getStorageData() {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(STORAGE_KEYS, (result) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      resolve(result);
+    });
+  });
+}
+
+/**
+ * @param {string} boardId
+ * @param {string} rawText
+ * @param {string} url
+ * @returns {Promise<void>}
+ */
+async function saveJobToAppliCache(boardId, rawText, url) {
+  const base = getApiBase();
+  if (!base) {
+    throw new Error(
+      "API URL not configured. Set APPLICACHE_API_BASE_URL in config.js.",
+    );
+  }
+  const data = await getStorageData();
+  const idToken = data.applicache_idToken;
+  if (!idToken || typeof idToken !== "string") {
+    throw new Error("Not signed in. Connect your account from the dashboard.");
+  }
+
+  const res = await fetch(
+    `${base}/boards/${encodeURIComponent(boardId)}/smart-cache`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ rawText, url }),
+    },
+  );
+
+  if (res.status === 401) {
+    throw new Error("Session expired. Please sign in again on the web.");
+  }
+  if (!res.ok) {
+    throw new Error(await parseErrorBody(res));
+  }
+}
+
+/**
+ * @param {string | undefined} msg
+ * @returns {boolean}
+ */
+function isContentScriptConnectionError(msg) {
+  if (!msg || typeof msg !== "string") return false;
+  return (
+    msg.includes("Could not establish connection") ||
+    msg.includes("Receiving end does not exist")
+  );
 }
 
 /**
@@ -232,6 +318,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   const btnCache = document.getElementById("btn-cache");
+  /** @type {boolean} */
+  let cacheRequestInFlight = false;
   if (btnCache) {
     btnCache.addEventListener("click", () => {
       const boardSelect = document.getElementById("board-select");
@@ -241,12 +329,18 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      if (cacheRequestInFlight) {
+        return;
+      }
+
       const finishLoading = () => {
+        cacheRequestInFlight = false;
         btnCache.classList.remove("btn--loading");
         btnCache.disabled = false;
         btnCache.setAttribute("aria-busy", "false");
       };
 
+      cacheRequestInFlight = true;
       btnCache.classList.add("btn--loading");
       btnCache.disabled = true;
       btnCache.setAttribute("aria-busy", "true");
@@ -260,36 +354,85 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
 
-        chrome.tabs.sendMessage(
-          tab.id,
-          { action: "GET_JOB_DATA" },
-          (response) => {
-            finishLoading();
+        if (!isLinkedInJobPageUrl(tab.url)) {
+          finishLoading();
+          setCacheStatus(
+            "error",
+            "Open a LinkedIn jobs page (linkedin.com/jobs/…) and try again.",
+          );
+          return;
+        }
 
-            if (chrome.runtime.lastError) {
-              setCacheStatus(
-                "error",
-                "Open a LinkedIn job page and try again.",
-              );
-              return;
-            }
+        try {
+          chrome.tabs.sendMessage(
+            tab.id,
+            { action: "GET_JOB_DATA" },
+            (response) => {
+              if (chrome.runtime.lastError) {
+                finishLoading();
+                const errMsg = chrome.runtime.lastError.message || "";
+                if (isContentScriptConnectionError(errMsg)) {
+                  setCacheStatus(
+                    "error",
+                    "Please refresh the LinkedIn page and try again.",
+                  );
+                } else {
+                  setCacheStatus(
+                    "error",
+                    "Open a LinkedIn jobs page and try again.",
+                  );
+                }
+                return;
+              }
 
-            if (
-              !response ||
-              typeof response !== "object" ||
-              typeof response.title !== "string"
-            ) {
-              setCacheStatus(
-                "error",
-                "Could not read this page. Open a LinkedIn job page and try again.",
-              );
-              return;
-            }
+              void (async () => {
+                try {
+                  if (
+                    !response ||
+                    typeof response !== "object" ||
+                    typeof response.rawText !== "string" ||
+                    typeof response.url !== "string"
+                  ) {
+                    setCacheStatus(
+                      "error",
+                      "Could not read this page. Open a LinkedIn jobs page and try again.",
+                    );
+                    return;
+                  }
 
-            console.log("AppliCache job data", response, "boardId", boardId);
-            setCacheStatus("success", "Job data captured (see extension console).");
-          },
-        );
+                  const raw = response.rawText.trim();
+                  if (raw.length <= 100) {
+                    setCacheStatus(
+                      "warning",
+                      "Not enough text on this page. Open a job or scroll to load content, then try again.",
+                    );
+                    return;
+                  }
+
+                  setCacheStatus("neutral", "Saving…");
+                  await saveJobToAppliCache(
+                    boardId,
+                    response.rawText,
+                    response.url,
+                  );
+                  setCacheStatus("success", "Saved to your board.");
+                } catch (e) {
+                  const msg =
+                    e instanceof Error ? e.message : "Could not save to your board.";
+                  setCacheStatus("error", msg);
+                } finally {
+                  finishLoading();
+                }
+              })();
+            },
+          );
+        } catch {
+          finishLoading();
+          setCacheStatus(
+            "error",
+            "Please refresh the LinkedIn page and try again.",
+          );
+        }
       });
     });
   }

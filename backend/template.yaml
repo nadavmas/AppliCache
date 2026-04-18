@@ -2,6 +2,13 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: AppliCache backend — Cognito, DynamoDB single table, Post Confirmation Lambda
 
+Parameters:
+  OpenAIApiKey:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: OpenAI API key for POST /boards/{boardId}/smart-cache
+
 Globals:
   Function:
     Timeout: 30
@@ -141,6 +148,7 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref AppliCacheData
+          OPENAI_API_KEY: !Ref OpenAIApiKey
       Policies:
         - Statement:
             - Effect: Allow
@@ -200,6 +208,12 @@ Resources:
             RestApiId: !Ref ApplicacheRestApi
             Path: /boards/{boardId}/entries/{rowId}
             Method: DELETE
+        SmartCache:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApplicacheRestApi
+            Path: /boards/{boardId}/smart-cache
+            Method: POST
 
 Outputs:
   AppliCacheDataTableName:
