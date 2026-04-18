@@ -17,7 +17,7 @@ function tokenToString(token) {
 
 /**
  * @param {string} jwt
- * @returns {{ email?: string } | null }
+ * @returns {Record<string, unknown> | null}
  */
 function decodeJwtPayload(jwt) {
   if (!jwt || typeof jwt !== "string") return null;
@@ -74,12 +74,20 @@ export async function syncAuthTokensToExtensionIfNeeded(extensionId) {
           ? payload["cognito:username"]
           : "";
 
+    const username =
+      typeof payload?.["cognito:username"] === "string"
+        ? payload["cognito:username"]
+        : typeof payload?.preferred_username === "string"
+          ? payload.preferred_username
+          : "";
+
     const message = {
       type: APPLICACHE_AUTH_SYNC_TYPE,
       idToken,
       accessToken,
       refreshToken,
       email,
+      username,
     };
 
     await new Promise((resolve, reject) => {

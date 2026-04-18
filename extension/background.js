@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   accessToken: "applicache_accessToken",
   refreshToken: "applicache_refreshToken",
   email: "applicache_email",
+  username: "applicache_username",
   idTokenExp: "applicache_idTokenExp",
 };
 
@@ -61,6 +62,8 @@ chrome.runtime.onMessageExternal.addListener(
     const refreshToken =
       typeof message.refreshToken === "string" ? message.refreshToken : "";
     const email = typeof message.email === "string" ? message.email : "";
+    const username =
+      typeof message.username === "string" ? message.username : "";
 
     if (!idToken) {
       sendResponse({ ok: false, error: "missing_id_token" });
@@ -74,6 +77,7 @@ chrome.runtime.onMessageExternal.addListener(
       [STORAGE_KEYS.accessToken]: accessToken,
       [STORAGE_KEYS.refreshToken]: refreshToken,
       [STORAGE_KEYS.email]: email,
+      [STORAGE_KEYS.username]: username,
     };
     if (expMs != null) {
       payload[STORAGE_KEYS.idTokenExp] = expMs;

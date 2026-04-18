@@ -137,17 +137,21 @@ export default function DashboardPage() {
   }, [status]);
 
   useEffect(() => {
+    if (boardsLoading) return;
     if (boards.length === 0) {
       setActiveBoardId(null);
       return;
     }
-    if (
-      !activeBoardId ||
-      !boards.some((b) => b.id === activeBoardId)
-    ) {
+    const boardFromUrl = searchParams.get("board");
+    if (boardFromUrl && boards.some((b) => b.id === boardFromUrl)) {
+      setActiveBoardId(boardFromUrl);
+      navigate("/dashboard", { replace: true });
+      return;
+    }
+    if (!activeBoardId || !boards.some((b) => b.id === activeBoardId)) {
       setActiveBoardId(boards[0].id);
     }
-  }, [boards, activeBoardId]);
+  }, [boardsLoading, boards, activeBoardId, searchParams, navigate]);
 
   useEffect(() => {
     setSaveBoardError("");

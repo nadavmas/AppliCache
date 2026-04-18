@@ -4,8 +4,62 @@ const STORAGE_KEYS = [
   "applicache_accessToken",
   "applicache_refreshToken",
   "applicache_email",
+  "applicache_username",
   "applicache_idTokenExp",
 ];
+
+/**
+ * @param {string} jwt
+ * @returns {Record<string, unknown> | null}
+ */
+function decodeJwtPayload(jwt) {
+  if (!jwt || typeof jwt !== "string") return null;
+  const parts = jwt.split(".");
+  if (parts.length < 2) return null;
+  try {
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+    const json = atob(padded);
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Cognito username for display (matches dashboard getCurrentUser().username).
+ *
+ * @param {Record<string, unknown>} data
+ * @returns {string}
+ */
+function getSignedInDisplayName(data) {
+  const stored =
+    typeof data.applicache_username === "string" && data.applicache_username.trim()
+      ? data.applicache_username.trim()
+      : "";
+  if (stored) return stored;
+
+  const idToken =
+    typeof data.applicache_idToken === "string" ? data.applicache_idToken : "";
+  if (idToken) {
+    const payload = decodeJwtPayload(idToken);
+    const fromToken =
+      payload &&
+      typeof payload["cognito:username"] === "string" &&
+      payload["cognito:username"].trim()
+        ? String(payload["cognito:username"]).trim()
+        : "";
+    if (fromToken) return fromToken;
+  }
+
+  const email =
+    typeof data.applicache_email === "string" && data.applicache_email.trim()
+      ? data.applicache_email.trim()
+      : "";
+  if (email) return email;
+
+  return "Account";
+}
 
 function getAppOrigin() {
   const origin =
@@ -67,6 +121,22 @@ function setCacheStatus(kind, text) {
   if (kind === "error") el.classList.add("cache-status--error");
   else if (kind === "success") el.classList.add("cache-status--success");
   else if (kind === "warning") el.classList.add("cache-status--warning");
+}
+
+/**
+ * @param {boolean} visible
+ * @param {string} [boardId]
+ */
+function setViewBoardButtonVisible(visible, boardId = "") {
+  const el = document.getElementById("btn-view-board");
+  if (!el) return;
+  if (visible && boardId) {
+    el.dataset.boardId = boardId;
+    el.classList.remove("hidden");
+  } else {
+    el.dataset.boardId = "";
+    el.classList.add("hidden");
+  }
 }
 
 function resetBoardSelect() {
@@ -414,21 +484,17 @@ async function loadBoards(idToken) {
 function render(data) {
   const authSection = document.getElementById("auth-section");
   const loginSection = document.getElementById("login-section");
-  const emailEl = document.getElementById("user-email");
+  const userEmailEl = document.getElementById("user-email");
   const loginMessage = document.getElementById("login-message");
 
-  if (!authSection || !loginSection || !emailEl) return;
+  if (!authSection || !loginSection || !userEmailEl) return;
 
   const authed = isSessionValid(data);
 
   if (authed) {
     loginSection.classList.add("hidden");
     authSection.classList.remove("hidden");
-    const email =
-      typeof data.applicache_email === "string" && data.applicache_email
-        ? data.applicache_email
-        : "Account";
-    emailEl.textContent = email;
+    userEmailEl.textContent = getSignedInDisplayName(data);
     setCacheStatus("neutral", "");
     const idToken =
       typeof data.applicache_idToken === "string" ? data.applicache_idToken : "";
@@ -439,6 +505,7 @@ function render(data) {
     authSection.classList.add("hidden");
     loginSection.classList.remove("hidden");
     resetBoardSelect();
+    setViewBoardButtonVisible(false);
     if (loginMessage) {
       const expired =
         typeof data.applicache_idTokenExp === "number" &&
@@ -484,9 +551,20 @@ document.addEventListener("DOMContentLoaded", () => {
   const logoutBtn = document.getElementById("btn-logout");
   if (logoutBtn) {
     logoutBtn.addEventListener("click", () => {
+      setViewBoardButtonVisible(false);
       chrome.storage.local.remove(STORAGE_KEYS, () => {
         refreshFromStorage();
       });
+    });
+  }
+
+  const viewBoardBtn = document.getElementById("btn-view-board");
+  if (viewBoardBtn) {
+    viewBoardBtn.addEventListener("click", () => {
+      const id = viewBoardBtn.dataset.boardId;
+      if (!id) return;
+      const url = `${getAppOrigin()}/dashboard?board=${encodeURIComponent(id)}`;
+      chrome.tabs.create({ url });
     });
   }
 
@@ -559,12 +637,14 @@ document.addEventListener("DOMContentLoaded", () => {
           setPreviewStatus("neutral", "");
           try {
             const cells = collectCellsFromPreview();
+            const savedBoardId = previewContext.boardId;
             await saveBoardRow(
-              previewContext.boardId,
+              savedBoardId,
               cells,
               previewContext.pageUrl,
             );
             setCacheStatus("success", "Saved to your board!");
+            setViewBoardButtonVisible(true, savedBoardId);
             hidePreviewView();
           } catch (e) {
             const msg =
@@ -595,6 +675,8 @@ document.addEventListener("DOMContentLoaded", () => {
         setCacheStatus("error", "Select a board first.");
         return;
       }
+
+      setViewBoardButtonVisible(false);
 
       if (cacheRequestInFlight) {
         return;

@@ -9,8 +9,7 @@
   <body>
     <div class="popup-container">
       <header class="popup-header">
-        <div class="popup-logo" aria-hidden="true">AC</div>
-        <h1 class="popup-title">AppliCache</h1>
+        <p class="popup-title">AppliCache</p>
       </header>
 
       <section id="auth-section" class="popup-card hidden" aria-live="polite">
@@ -38,6 +37,15 @@
           role="status"
           aria-live="polite"
         ></p>
+
+        <button
+          type="button"
+          class="btn btn-secondary btn-view-board hidden"
+          id="btn-view-board"
+          data-board-id=""
+        >
+          Take a look at your board
+        </button>
 
         <button type="button" class="btn btn-secondary" id="btn-logout">
           Log out
