@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { getCurrentUser } from "aws-amplify/auth";
 import { signOut } from "../auth/cognitoStub";
+import { syncAuthTokensToExtensionIfNeeded } from "../auth/extensionAuthSync";
 import {
   addBoardEntry,
   createBoard,
@@ -27,6 +28,9 @@ import {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const fromExtensionParam = searchParams.get("from");
+  const extensionIdParam = searchParams.get("extensionId");
   const [status, setStatus] = useState("checking");
   const [displayName, setDisplayName] = useState("");
   const [signingOut, setSigningOut] = useState(false);
@@ -81,6 +85,26 @@ export default function DashboardPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (status !== "authed") return undefined;
+
+    if (fromExtensionParam !== "extension" || !extensionIdParam) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      await syncAuthTokensToExtensionIfNeeded(extensionIdParam);
+      if (cancelled) return;
+      navigate("/dashboard", { replace: true });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [status, navigate, fromExtensionParam, extensionIdParam]);
 
   useEffect(() => {
     if (status !== "authed" || !isBoardsApiConfigured()) {
@@ -717,7 +741,8 @@ export default function DashboardPage() {
   }
 
   if (status === "guest") {
-    return <Navigate to="/login" replace />;
+    const qs = searchParams.toString();
+    return <Navigate to={qs ? `/login?${qs}` : "/login"} replace />;
   }
 
   return (

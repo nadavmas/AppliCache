@@ -26,13 +26,20 @@ AppliCache provides:
 - Main user experience: dashboard for viewing, filtering, and updating applications
 - Authenticated user sessions tied to AWS Cognito
 
+### Chrome extension
+
+- Root folder **`extension/`**: Manifest V3 Chrome extension, vanilla JavaScript (no bundler in Phase 1).
+- Purpose: capture LinkedIn job metadata and send it to the secured AppliCache API so jobs appear on the dashboard (see **LinkedIn Extension Flow** below).
+- Key files: `manifest.json`, `popup.html`, `popup.js`, `background.js`, `content.js`, `content.css`. Host permissions include LinkedIn and an API Gateway placeholder pattern for future `fetch` calls; the LinkedIn content script uses `all_frames: false` so it runs in the top-level page only.
+- Auth: Cognito tokens are **not** obtained inside the extension UI; users sign in via the React app. The SPA sends tokens to the extension with `chrome.runtime.sendMessage` (externally connectable web origins listed in `manifest.json` and `extension/config.js` must match the SPA URL, e.g. `http://localhost:5173` for local Vite). Tokens persist in **`chrome.storage.local`** only.
+
 ### Backend Architecture
 
 - Runtime: Node.js
 - Pattern: Raw AWS Lambda handlers behind API Gateway (default recommendation)
 - API consumer clients:
   - React frontend
-  - Chrome extension
+  - Chrome extension (see `extension/` scaffold)
 
 ### AWS Services and Responsibilities
 
@@ -130,6 +137,8 @@ Update this section only when explicitly requested.
 | **Board metadata editing (SPA)**: **`updateBoard(boardId, { boardName, columns })`** in **`boardsApi.js`** (**`PATCH`**, Bearer + JSON). **Dashboard**: **`isEditingBoard`**, **`boardEditDraft`**, **`savingBoardEdit`**, **`saveBoardEditError`**; **`boardForTable`** view model; **`canSaveBoardEdit`** (trimmed non-empty board name + every column name non-empty); **`handleSaveBoardEdit`** / cancel; **`handleAddColumn`** branches to append draft column when editing; **`handleRemove`** / rename column drafts; **`handleUpdateBoard`** merges **`boardFromServer`** into **`boards`**. **Mutual exclusion** on **Edit Board**: revert in-progress row edit (same as cancel), drop **`pendingSave`** draft rows, then open board edit. Row/cell/entry actions gated while **`isEditingBoard`**; **`activeBoardId`** change clears board edit state. | 2026-04-17 | `frontend/src/api/boardsApi.js`, `DashboardPage.jsx`. |
 | **Board metadata editing (UI)**: Board title (**`h2`** / input) **above** the table; **⋯** board actions menu (**Edit Board** / **Delete Board** disabled, “coming soon”) in the **thead** row **aligned with column headers** (after data + optional **+** column, before row-actions column); empty body cell uses **`board-table__td--board-menu-spacer`** (no **`--pad`** muted fill) so the spacer matches row striping. Edit mode: column header inputs with **remove** (**`×`**) when **>1** column, **Save Changes** / **Cancel**, **`.board-table__board-edit-input`** hover/focus borders, **`.board-actions`** dropdown styles. | 2026-04-17 | `BoardTableView.jsx`, `styles.css`. |
 | **Delete board**: **`DELETE /boards/{boardId}`** — SAM **`DeleteBoard`** + IAM **`dynamodb:DeleteItem`**. Lambda refactors **`DELETE`**: no **`rowId`** → **`DeleteItem`** on **`USER#<sub>`** / **`BOARD#<id>`** with **`ConditionExpression: attribute_exists(PK)`** (idempotent 404 via **`ConditionalCheckFailedException`**); **`204`** via **`noContent()`** with **same CORS headers** as JSON responses (explicit origin, not `*`). Entry delete unchanged when **`rowId`** present. SPA: **`deleteBoard`**, confirm, **`deletingBoardId`** + overlay + **`boardInteractionsLocked`** (sidebar + handlers), remove deleted board from state; empty copy when **`boards.length === 0`**. | 2026-04-18 | `backend/template.yaml`, `backend/functions/boards/index.js`, `frontend/src/api/boardsApi.js`, `DashboardPage.jsx`, `BoardTableView.jsx`, `DashboardSidebar.jsx`, `styles.css`. |
+| **Phase 1: Extension Scaffolding** | 2026-04-18 | MV3 manifest (`storage` for `chrome.storage.local`, `identity`, host permissions: LinkedIn + API Gateway placeholder), `popup.html`/`popup.js`, `background.js`, `content.js`, empty `content.css` registered; content script `all_frames`/`match_about_blank` false; vanilla JS; popup UI tokens aligned with `frontend/src/styles.css`. |
+| **Phase 2: Auth Integration (Tokens sync with Web App)** | 2026-04-18 | `externally_connectable` (e.g. `http://localhost:5173/*`; add production origin in manifest + `extension/config.js` when deploying), `onMessageExternal` in `background.js`, `chrome.storage.local` for id/access/refresh tokens + email + id token exp; `extension/config.js`; popup login tab + profile/logout; SPA `extensionAuthSync.js` + `LoginPage` query preservation + `DashboardPage` guarded `fetchAuthSession` → extension bridge and URL strip. |
 
 ### Recent work log (since last backlog snapshot)
 

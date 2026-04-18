@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { getCurrentUser } from "aws-amplify/auth";
 import AuthLayout from "../components/AuthLayout";
 import { signIn } from "../auth/cognitoStub";
 
@@ -22,6 +23,7 @@ function validateLogin({ email, password }) {
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
@@ -30,6 +32,22 @@ export default function LoginPage() {
 
   const emailInvalid = Boolean(fieldErrors.email);
   const passwordInvalid = Boolean(fieldErrors.password);
+
+  useEffect(() => {
+    let cancelled = false;
+    getCurrentUser()
+      .then(() => {
+        if (cancelled) return;
+        const qs = searchParams.toString();
+        navigate(qs ? `/dashboard?${qs}` : "/dashboard", { replace: true });
+      })
+      .catch(() => {
+        /* not signed in — stay on login */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate, searchParams]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -44,7 +62,8 @@ export default function LoginPage() {
         username: email.trim(),
         password,
       });
-      navigate("/dashboard", { replace: true });
+      const qs = searchParams.toString();
+      navigate(qs ? `/dashboard?${qs}` : "/dashboard", { replace: true });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Something went wrong. Try again.";
