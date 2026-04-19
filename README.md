@@ -5,23 +5,13 @@
 ## App View
 ---
 <p align="center">
-  <img src="docs/screenshots/login.png" width="600" alt="AppliCache Dashboard">
+  <video src="docs/screenshots/board_creation.mp4" width="600" autoplay loop muted playsinline></video><br>
+  <em>Board creation in the web app</em>
 </p>
 <p align="center">
-  <img src="docs/screenshots/dashboard.png" width="600" alt="AppliCache Dashboard">
+  <video src="docs/screenshots/ai_entry_creation.mp4" width="600" autoplay loop muted playsinline></video><br>
+  <em>Chrome extension — AI entry creation with OpenAI</em>
 </p>
-<table style="width:100%">
-  <tr>
-    <td style="width:50%; text-align:center;">
-      <img src="docs/screenshots/extension_popup.png" width="350" alt="Chrome Extension Popup"><br>
-      <em>Chrome Extension - LinkedIn Integration</em>
-    </td>
-    <td style="width:50%; text-align:center;">
-      <img src="docs/screenshots/extension_smart_fill.png" width="350" alt="AI Smart Cache Preview"><br>
-      <em>AI Smart Cache - Mapping Page Data</em>
-    </td>
-  </tr>
-</table>
 
 ---
 
@@ -101,7 +91,7 @@ backend/           # SAM template + Lambda functions
     postConfirmation/
 extension/         # Chrome extension (popup, content, background)
 scripts/           # e.g. sync-extension-env — align extension API URL with Vite env
-docs/screenshots/  # Images used in README
+docs/screenshots/  # README media (demo videos)
 ```
 
 ---
