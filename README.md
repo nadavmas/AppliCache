@@ -3,15 +3,24 @@
 **AppliCache** is a full-stack portfolio project: a job-application tracker with a **React** web app, **serverless AWS** backend, and a **Chrome extension** that captures roles from LinkedIn. It is designed to demonstrate how I think about product, architecture, and shipping working software—not a spreadsheet with extra steps, but authenticated APIs, real persistence, and a cohesive user journey from browser to cloud.
 
 ## App View
----
+
+<details>
+<summary><strong>Board Creation Flow</strong></summary>
+
 <p align="center">
-  <video src="docs/screenshots/board_creation.mp4" width="600" autoplay loop muted playsinline></video><br>
-  <em>Board creation in the web app</em>
+  <img src="docs/screenshots/board_creation_gif.gif" width="700" alt="Board creation in the web app">
 </p>
+
+</details>
+
+<details>
+<summary><strong>AI-Powered Entry Tracking</strong></summary>
+
 <p align="center">
-  <video src="docs/screenshots/ai_entry_creation.mp4" width="600" autoplay loop muted playsinline></video><br>
-  <em>Chrome extension — AI entry creation with OpenAI</em>
+  <img src="docs/screenshots/ai_entry_creation_gif.gif" width="700" alt="Chrome extension — AI entry creation with OpenAI">
 </p>
+
+</details>
 
 ---
 
@@ -91,7 +100,7 @@ backend/           # SAM template + Lambda functions
     postConfirmation/
 extension/         # Chrome extension (popup, content, background)
 scripts/           # e.g. sync-extension-env — align extension API URL with Vite env
-docs/screenshots/  # README media (demo videos)
+docs/screenshots/  # README media (demo GIFs)
 ```
 
 ---
