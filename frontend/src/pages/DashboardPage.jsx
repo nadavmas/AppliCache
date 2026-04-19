@@ -148,8 +148,8 @@ export default function DashboardPage() {
       navigate("/dashboard", { replace: true });
       return;
     }
-    if (!activeBoardId || !boards.some((b) => b.id === activeBoardId)) {
-      setActiveBoardId(boards[0].id);
+    if (activeBoardId && !boards.some((b) => b.id === activeBoardId)) {
+      setActiveBoardId(null);
     }
   }, [boardsLoading, boards, activeBoardId, searchParams, navigate]);
 
@@ -773,15 +773,9 @@ export default function DashboardPage() {
           className={
             activeBoard
               ? "dashboard-main__inner dashboard-main__inner--wide"
-              : "dashboard-main__inner"
+              : "dashboard-main__inner dashboard-main__inner--solo"
           }
         >
-          <h1>Dashboard</h1>
-          <p>
-            {displayName
-              ? `Welcome back, ${displayName}.`
-              : "Welcome to your AppliCache home."}
-          </p>
           {boardsLoadError ? (
             <p className="auth-form-error dashboard-main__api-error" role="alert">
               {boardsLoadError}
@@ -789,6 +783,12 @@ export default function DashboardPage() {
           ) : null}
           {activeBoard ? (
             <>
+              <h1 className="dashboard-main__page-title">Dashboard</h1>
+              <p>
+                {displayName
+                  ? `Welcome back, ${displayName}.`
+                  : "Welcome to your AppliCache home."}
+              </p>
               <BoardTableView
                 key={activeBoard.id}
                 board={boardForTable ?? activeBoard}
@@ -856,12 +856,8 @@ export default function DashboardPage() {
               ) : null}
             </>
           ) : (
-            <p className="dashboard-main__meta dashboard-main__meta--solo">
-              {boardsLoading
-                ? "Loading your tables…"
-                : boards.length === 0
-                  ? "You have no boards yet. Create one from the sidebar to get started."
-                  : "Create a table from the sidebar to get started."}
+            <p className="dashboard-main__tagline">
+              Cache applications, Catch opportunities
             </p>
           )}
         </div>
