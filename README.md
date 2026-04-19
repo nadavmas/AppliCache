@@ -6,9 +6,8 @@
 ---
 
 <p align="center">
-  <img src="docs/screenshots/dashboard.png" width="800" alt="AppliCache Dashboard">
+  <img src="docs/screenshots/dashboard.png" width="700" alt="AppliCache Dashboard">
 </p>
-
 <table style="width:100%">
   <tr>
     <td style="width:50%; text-align:center;">
@@ -16,7 +15,7 @@
       <em>Chrome Extension - LinkedIn Integration</em>
     </td>
     <td style="width:50%; text-align:center;">
-      <img src="docs/screenshots/smart_cache.png" width="350" alt="AI Smart Cache Preview"><br>
+      <img src="docs/screenshots/extension_smart_fill.png" width="350" alt="AI Smart Cache Preview"><br>
       <em>AI Smart Cache - Mapping Page Data</em>
     </td>
   </tr>
