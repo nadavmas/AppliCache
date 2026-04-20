@@ -1,4 +1,8 @@
 import { Link } from "react-router-dom";
+import {
+  BRANDING_LOGO_LOCKUP_ALT,
+  BRANDING_LOGO_LOCKUP_SRC,
+} from "../branding.js";
 
 /**
  * Shared shell for login / sign-up: centered card, branding, optional footer link row.
@@ -15,8 +19,8 @@ export default function AuthLayout({
       <div className="auth-card">
         <img
           className="auth-card__logo"
-          src="/applicache_logo.png"
-          alt="AppliCache"
+          src={BRANDING_LOGO_LOCKUP_SRC}
+          alt={BRANDING_LOGO_LOCKUP_ALT}
         />
         <h1 className="auth-card__title">{title}</h1>
         {subtitle ? (

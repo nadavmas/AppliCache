@@ -23,6 +23,7 @@ const PlusIcon = () => (
  * Presentational sidebar: job board list, create table flow, settings / sign out.
  */
 export default function DashboardSidebar({
+  signedInUsername = "",
   boards = [],
   activeBoardId = null,
   onSelectBoard,
@@ -89,11 +90,18 @@ export default function DashboardSidebar({
 
   return (
     <aside className="dashboard-sidebar" aria-label="AppliCache navigation">
-      <img
-        className="dashboard-sidebar__brand"
-        src="/applicache_logo.png"
-        alt="AppliCache"
-      />
+      <div className="dashboard-sidebar__brand-wrap">
+        <img
+          className="dashboard-sidebar__brand"
+          src="/applicache_logo.png"
+          alt="AppliCache"
+        />
+        {signedInUsername ? (
+          <p className="dashboard-sidebar__signed-in">
+            Signed in as: {signedInUsername}
+          </p>
+        ) : null}
+      </div>
 
       <nav
         className="dashboard-sidebar__primary"

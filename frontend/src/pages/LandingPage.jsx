@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { getCurrentUser } from "aws-amplify/auth";
+import {
+  BRANDING_LOGO_LOCKUP_ALT,
+  BRANDING_LOGO_LOCKUP_SRC,
+} from "../branding.js";
 
 export default function LandingPage() {
   const [status, setStatus] = useState("checking");
@@ -43,22 +47,31 @@ export default function LandingPage() {
   }
 
   return (
-    <main className="landing-page">
-      <section className="hero">
-        <h1>AppliCache</h1>
-        <p>
-          Manage all your job applications in one place. Say goodbye to messy
-          spreadsheets.
-        </p>
-        <div className="hero-actions">
-          <Link to="/login" className="btn btn-secondary">
-            Login
-          </Link>
-          <Link to="/signup" className="btn btn-primary">
-            Sign Up
-          </Link>
-        </div>
-      </section>
+    <main className="landing-page landing-page--marketing">
+      <div className="landing-page__guest">
+        <section className="hero hero--guest" aria-labelledby="landing-guest-title">
+          <h1 id="landing-guest-title" className="visually-hidden">
+            {BRANDING_LOGO_LOCKUP_ALT}
+          </h1>
+          <img
+            className="hero__logo"
+            src={BRANDING_LOGO_LOCKUP_SRC}
+            alt=""
+            decoding="async"
+          />
+          <p className="hero__lede">
+            Manage every application in one calm workspace—no spreadsheet chaos.
+          </p>
+          <div className="hero-actions hero-actions--guest">
+            <Link to="/login" className="btn btn-secondary btn--landing-cta">
+              Log in
+            </Link>
+            <Link to="/signup" className="btn btn-primary btn--landing-cta">
+              Sign up
+            </Link>
+          </div>
+        </section>
+      </div>
     </main>
   );
 }

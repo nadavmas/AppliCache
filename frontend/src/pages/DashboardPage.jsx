@@ -32,7 +32,7 @@ export default function DashboardPage() {
   const fromExtensionParam = searchParams.get("from");
   const extensionIdParam = searchParams.get("extensionId");
   const [status, setStatus] = useState("checking");
-  const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
   const [signingOut, setSigningOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
 
@@ -74,7 +74,7 @@ export default function DashboardPage() {
     getCurrentUser()
       .then((user) => {
         if (!cancelled) {
-          setDisplayName(user.username ?? "");
+          setUsername(user.username ?? "");
           setStatus("authed");
         }
       })
@@ -752,6 +752,7 @@ export default function DashboardPage() {
   return (
     <div className="dashboard-shell">
       <DashboardSidebar
+        signedInUsername={username}
         boards={boards}
         activeBoardId={activeBoardId}
         onSelectBoard={handleSelectBoard}
@@ -773,7 +774,7 @@ export default function DashboardPage() {
           className={
             activeBoard
               ? "dashboard-main__inner dashboard-main__inner--wide"
-              : "dashboard-main__inner dashboard-main__inner--solo"
+              : "dashboard-main__inner"
           }
         >
           {boardsLoadError ? (
@@ -784,11 +785,6 @@ export default function DashboardPage() {
           {activeBoard ? (
             <>
               <h1 className="dashboard-main__page-title">Dashboard</h1>
-              <p>
-                {displayName
-                  ? `Welcome back, ${displayName}.`
-                  : "Welcome to your AppliCache home."}
-              </p>
               <BoardTableView
                 key={activeBoard.id}
                 board={boardForTable ?? activeBoard}
@@ -855,11 +851,7 @@ export default function DashboardPage() {
                 </div>
               ) : null}
             </>
-          ) : (
-            <p className="dashboard-main__tagline">
-              Cache applications, Catch opportunities
-            </p>
-          )}
+          ) : null}
         </div>
       </main>
     </div>
