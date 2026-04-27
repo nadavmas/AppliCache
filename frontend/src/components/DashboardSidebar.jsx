@@ -19,6 +19,31 @@ const PlusIcon = () => (
   </svg>
 )
 
+const ResumeDocumentIcon = () => (
+  <svg
+    className="dashboard-sidebar__resume-item-icon"
+    width={18}
+    height={18}
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+  >
+    <path
+      d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M14 2v6h6M10 13h4M10 17h8"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+  </svg>
+)
+
 /**
  * Presentational sidebar: job board list, create table flow, settings / sign out.
  */
@@ -39,11 +64,15 @@ export default function DashboardSidebar({
   onSignOut,
   signingOut = false,
   logoutError = "",
+  resumes = [],
+  onAddResume,
+  onSelectResume,
 }) {
   const createEscapeRef = useRef(false)
   const [isBoardsExpanded, setIsBoardsExpanded] = useState(
     () => Boolean(activeBoardId),
   )
+  const [isResumesExpanded, setIsResumesExpanded] = useState(false)
 
   useEffect(() => {
     if (activeBoardId) {
@@ -57,6 +86,21 @@ export default function DashboardSidebar({
 
   const handleToggleBoards = () => {
     setIsBoardsExpanded((prev) => !prev)
+  }
+
+  const handleToggleResumes = () => {
+    setIsResumesExpanded((prev) => !prev)
+  }
+
+  const handleAddResumeClick = () => {
+    setIsResumesExpanded(true)
+    onAddResume?.()
+  }
+
+  const handleAddResumeKeyDown = (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return
+    e.preventDefault()
+    handleAddResumeClick()
   }
 
   const handleCreateKeyDown = (e) => {
@@ -253,6 +297,78 @@ export default function DashboardSidebar({
                       {createBoardError}
                     </p>
                   ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="dashboard-sidebar__resumes-block">
+          <div className="dashboard-sidebar__resumes-header">
+            <button
+              type="button"
+              id="sidebar-resumes-toggle"
+              className="dashboard-sidebar__nav-link dashboard-sidebar__resumes-toggle"
+              aria-expanded={isResumesExpanded}
+              aria-controls="dashboard-resumes-panel"
+              onClick={handleToggleResumes}
+            >
+              Resumes
+            </button>
+            <button
+              type="button"
+              className="dashboard-sidebar__resumes-add"
+              aria-label="Add resume"
+              title="Add resume"
+              onClick={handleAddResumeClick}
+              onKeyDown={handleAddResumeKeyDown}
+            >
+              <PlusIcon />
+            </button>
+          </div>
+
+          <div
+            className={
+              isResumesExpanded
+                ? "dashboard-sidebar__resumes-accordion is-expanded"
+                : "dashboard-sidebar__resumes-accordion"
+            }
+          >
+            <div className="dashboard-sidebar__resumes-accordion-inner">
+              <div
+                id="dashboard-resumes-panel"
+                className="dashboard-sidebar__resumes-panel"
+                role="region"
+                aria-labelledby="sidebar-resumes-toggle"
+              >
+                <div className="dashboard-sidebar__resumes-panel-fade">
+                  {resumes.length > 0 ? (
+                    <ul className="dashboard-sidebar__list">
+                      {resumes.map((resume) => (
+                        <li key={resume.id}>
+                          <button
+                            type="button"
+                            className="dashboard-sidebar__resume-item"
+                            onClick={() => onSelectResume?.(resume.id)}
+                          >
+                            <ResumeDocumentIcon />
+                            <span className="dashboard-sidebar__resume-item-label">
+                              {resume.name ?? "Resume"}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="dashboard-sidebar__resumes-empty-wrap">
+                      <p className="dashboard-sidebar__resumes-empty-title">
+                        No resumes added
+                      </p>
+                      <p className="dashboard-sidebar__resumes-empty-hint">
+                        Click + to upload
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

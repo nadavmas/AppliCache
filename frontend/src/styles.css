@@ -96,7 +96,12 @@ body {
   .dashboard-sidebar__logout,
   .dashboard-sidebar__nav-link,
   .dashboard-sidebar__boards-accordion,
-  .dashboard-sidebar__boards-panel-fade {
+  .dashboard-sidebar__boards-panel-fade,
+  .dashboard-sidebar__resumes-accordion,
+  .dashboard-sidebar__resumes-panel-fade,
+  .dashboard-sidebar__resume-item,
+  .dashboard-sidebar__resumes-add,
+  .dashboard-sidebar__resumes-toggle {
     transition: none !important;
   }
 
@@ -857,6 +862,172 @@ button.auth-link {
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+.dashboard-sidebar__resumes-block {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dashboard-sidebar__resumes-header {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-1);
+  width: 100%;
+}
+
+.dashboard-sidebar__resumes-toggle {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+.dashboard-sidebar__resumes-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.25rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.dashboard-sidebar__resumes-add .dashboard-sidebar__create-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.dashboard-sidebar__resumes-add:hover {
+  background: rgba(0, 113, 227, 0.06);
+  color: var(--accent-hover);
+}
+
+.dashboard-sidebar__resumes-add:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.dashboard-sidebar__resumes-accordion {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--duration-normal) var(--ease-out);
+}
+
+.dashboard-sidebar__resumes-accordion.is-expanded {
+  grid-template-rows: 1fr;
+}
+
+.dashboard-sidebar__resumes-accordion-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dashboard-sidebar__resumes-panel {
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-height: min(50vh, 22rem);
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-1);
+  -webkit-overflow-scrolling: touch;
+}
+
+.dashboard-sidebar__resumes-panel-fade {
+  opacity: 0;
+  transition: opacity var(--duration-normal) var(--ease-out);
+  transition-delay: 0ms;
+}
+
+.dashboard-sidebar__resumes-accordion.is-expanded .dashboard-sidebar__resumes-panel-fade {
+  opacity: 1;
+  transition-delay: 55ms;
+}
+
+.dashboard-sidebar__resumes-accordion:not(.is-expanded) .dashboard-sidebar__resumes-panel-fade {
+  transition-delay: 0ms;
+}
+
+.dashboard-sidebar__resumes-accordion:not(.is-expanded) .dashboard-sidebar__resumes-panel {
+  pointer-events: none;
+}
+
+.dashboard-sidebar__resumes-empty-wrap {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-2) var(--space-2);
+  text-align: center;
+}
+
+.dashboard-sidebar__resumes-empty-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--sidebar-muted-text-size);
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.dashboard-sidebar__resumes-empty-hint {
+  margin: 0;
+  font-size: var(--sidebar-micro-text-size);
+  color: var(--muted);
+  opacity: 0.85;
+  line-height: 1.35;
+}
+
+.dashboard-sidebar__resume-item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  margin: 0;
+  padding: var(--space-3) var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  font-size: var(--sidebar-board-text-size);
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.dashboard-sidebar__resume-item-icon {
+  flex-shrink: 0;
+  opacity: 0.72;
+  color: var(--muted);
+}
+
+.dashboard-sidebar__resume-item-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-sidebar__resume-item:hover {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.dashboard-sidebar__resume-item:hover .dashboard-sidebar__resume-item-icon {
+  color: var(--accent);
+  opacity: 0.9;
+}
+
+.dashboard-sidebar__resume-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .dashboard-sidebar__nav-link {

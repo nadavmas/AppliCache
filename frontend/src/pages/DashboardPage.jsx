@@ -167,6 +167,10 @@ export default function DashboardPage() {
 
   const boardInteractionsLocked = deletingBoardId != null;
 
+  const handleAddResume = () => {
+    console.log("[dashboard] add resume (placeholder)");
+  };
+
   const handleSelectBoard = (boardId) => {
     if (boardInteractionsLocked) return;
     setActiveBoardId(boardId);
@@ -768,6 +772,8 @@ export default function DashboardPage() {
         onSignOut={handleSignOut}
         signingOut={signingOut}
         logoutError={logoutError}
+        resumes={[]}
+        onAddResume={handleAddResume}
       />
       <main className="dashboard-main">
         <div
