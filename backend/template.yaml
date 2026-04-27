@@ -9,6 +9,16 @@ Parameters:
     NoEcho: true
     Description: OpenAI API key for POST /boards/{boardId}/smart-cache
 
+  AllowedCorsOrigins:
+    Type: CommaDelimitedList
+    Default: "http://localhost:5173,https://appli-cache.vercel.app,https://applicache-git-main-nadavmas-projects.vercel.app"
+    Description: Browser origins allowed for CORS (boards Lambda + OPTIONS). No trailing slashes.
+
+  CorsGatewayErrorOrigin:
+    Type: String
+    Default: "https://appli-cache.vercel.app"
+    Description: Single Access-Control-Allow-Origin for API Gateway DEFAULT_4XX/DEFAULT_5XX (authorizer errors). Override for local-first dev if needed.
+
 Globals:
   Function:
     Timeout: 30
@@ -110,10 +120,6 @@ Resources:
     Properties:
       Name: !Sub "${AWS::StackName}-rest"
       StageName: Prod
-      Cors:
-        AllowMethods: "'GET,POST,PATCH,DELETE,OPTIONS'"
-        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-        AllowOrigin: "'http://localhost:5173'"
       Auth:
         DefaultAuthorizer: MyCognitoAuthorizer
         # REST SAM: singular Authorizer. Do not use HttpApi AddDefaultAuthorizersToCorsPreflight (invalid here).
@@ -127,13 +133,13 @@ Resources:
         DEFAULT_4XX:
           ResponseParameters:
             Headers:
-              Access-Control-Allow-Origin: "'http://localhost:5173'"
+              Access-Control-Allow-Origin: !Sub "'${CorsGatewayErrorOrigin}'"
               Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               Access-Control-Allow-Methods: "'GET,POST,PATCH,DELETE,OPTIONS'"
         DEFAULT_5XX:
           ResponseParameters:
             Headers:
-              Access-Control-Allow-Origin: "'http://localhost:5173'"
+              Access-Control-Allow-Origin: !Sub "'${CorsGatewayErrorOrigin}'"
               Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               Access-Control-Allow-Methods: "'GET,POST,PATCH,DELETE,OPTIONS'"
 
@@ -149,6 +155,7 @@ Resources:
         Variables:
           TABLE_NAME: !Ref AppliCacheData
           OPENAI_API_KEY: !Ref OpenAIApiKey
+          CORS_ALLOWED_ORIGINS: !Join [",", !Ref AllowedCorsOrigins]
       Policies:
         - Statement:
             - Effect: Allow
@@ -214,6 +221,46 @@ Resources:
             RestApiId: !Ref ApplicacheRestApi
             Path: /boards/{boardId}/smart-cache
             Method: POST
+        BoardsCollectionOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApplicacheRestApi
+            Path: /boards
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+        BoardItemOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApplicacheRestApi
+            Path: /boards/{boardId}
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+        BoardEntriesCollectionOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApplicacheRestApi
+            Path: /boards/{boardId}/entries
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+        BoardEntryItemOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApplicacheRestApi
+            Path: /boards/{boardId}/entries/{rowId}
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+        SmartCacheOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApplicacheRestApi
+            Path: /boards/{boardId}/smart-cache
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
 
 Outputs:
   AppliCacheDataTableName:

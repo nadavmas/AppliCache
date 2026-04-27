@@ -145,7 +145,7 @@ The extension is plain MV3 assets under `extension/` (no separate build step). I
 
 2. **Load the extension in Chrome**: open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and choose the **`extension`** folder in this repo (the directory that contains `manifest.json`).
 
-3. **Connect auth to the extension**: Sign in to AppliCache in the **same browser** at **http://localhost:5173** (the dev origin). The SPA passes Cognito tokens to the extension; `extension/manifest.json` `externally_connectable` and `extension/config.js` `APPLICACHE_ALLOWED_ORIGINS` must include that origin. For a hosted SPA, add your production URL in both places.
+3. **Connect auth to the extension**: Sign in to AppliCache in the **same browser** at your SPA origin (e.g. **http://localhost:5173** or your **Vercel** URL). The SPA passes Cognito tokens to the extension; `extension/manifest.json` `externally_connectable` and `extension/config.js` `APPLICACHE_ALLOWED_ORIGINS` must include that origin. `APPLICACHE_APP_ORIGIN` defaults to the first entry in `config.js` (localhost for dev); change it if your primary app URL is production-only.
 
 4. **Use it on LinkedIn**: Open a job page on **https://www.linkedin.com**, click the AppliCache toolbar icon, pick a board, and use **Cache this application** / **Save to Board**. If API calls fail, confirm `host_permissions` in `manifest.json` covers your API host (the template uses `*.execute-api.us-east-1.amazonaws.com`; adjust the region pattern if your API is elsewhere).
 
@@ -161,7 +161,11 @@ The extension is plain MV3 assets under `extension/` (no separate build step). I
 
 4. **Deploy / update backend**: Use SAM from `backend/` (`sam build`, `sam deploy`) per your workflow; pass parameters such as `OpenAIApiKey` for smart-cache.
 
-**Production hosting**: The frontend is a static Vite build (`npm run build` → `dist/`). You can host it on **S3 + CloudFront**, **Amplify Hosting**, **Vercel**, or similar—configure **CORS** on API Gateway for your real web origin (the template currently targets local dev for `AllowOrigin`; update for production).
+**Backend CORS (Vercel + localhost)**: [backend/template.yaml](backend/template.yaml) defines `AllowedCorsOrigins` (comma-separated list passed to the boards Lambda as `CORS_ALLOWED_ORIGINS`) and `CorsGatewayErrorOrigin` (single origin used only on API Gateway `DEFAULT_4XX` / `DEFAULT_5XX` responses when the Cognito authorizer rejects the request before Lambda runs). Override defaults at deploy time, e.g. `sam deploy --parameter-overrides CorsGatewayErrorOrigin=http://localhost:5173` if you need local-first behavior for those gateway errors. Successful API responses and `OPTIONS` preflight use the Lambda allowlist and the request `Origin` header.
+
+**Optional Hosted UI**: Set `VITE_COGNITO_HOSTED_UI_DOMAIN` in the frontend env (see `frontend/.env.example`) only if you use Cognito Hosted UI; match callback/sign-out URLs in the Cognito app client.
+
+**Production hosting**: The frontend is a static Vite build (`npm run build` → `dist/`). You can host it on **S3 + CloudFront**, **Amplify Hosting**, **Vercel**, or similar—ensure your deployed origin is listed in `AllowedCorsOrigins` and in the Chrome extension `manifest.json` / `extension/config.js` if you use the extension.
 
 ---
 

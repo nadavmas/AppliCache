@@ -11,7 +11,11 @@
   },
   "permissions": ["storage", "identity"],
   "externally_connectable": {
-    "matches": ["http://localhost:5173/*"]
+    "matches": [
+      "http://localhost:5173/*",
+      "https://appli-cache.vercel.app/*",
+      "https://applicache-git-main-nadavmas-projects.vercel.app/*"
+    ]
   },
   "host_permissions": [
     "https://www.linkedin.com/*",

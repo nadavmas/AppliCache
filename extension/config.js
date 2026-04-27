@@ -7,8 +7,10 @@
   if (!g) return;
   g.APPLICACHE_ALLOWED_ORIGINS = [
     "http://localhost:5173",
-    // "https://your-production-host.example",
+    "https://appli-cache.vercel.app",
+    "https://applicache-git-main-nadavmas-projects.vercel.app",
   ];
+  /** Default SPA origin for opening the app from the popup; keep localhost first for local dev. */
   g.APPLICACHE_APP_ORIGIN = g.APPLICACHE_ALLOWED_ORIGINS[0];
   /**
    * REST API base URL — set in gitignored `env.local.js` (see `env.local.example.js`).

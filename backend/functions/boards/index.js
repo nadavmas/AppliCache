@@ -15,30 +15,55 @@ const client = new DynamoDBClient({})
 
 const DEFAULT_COLUMN_NAMES = ["Company", "Job Title", "Status"]
 
-const CORS_ORIGIN = "http://localhost:5173"
+const CORS_ALLOW_HEADERS =
+  "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token"
+const CORS_ALLOW_METHODS = "OPTIONS,GET,POST,PATCH,DELETE"
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": CORS_ORIGIN,
-  "Access-Control-Allow-Headers":
-    "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
-  "Access-Control-Allow-Methods": "OPTIONS,GET,POST,PATCH,DELETE",
+/** @type {string[] | null} */
+let memoCorsAllowedOrigins = null
+
+function normalizeOrigin(value) {
+  return String(value ?? "")
+    .trim()
+    .replace(/\/+$/, "")
 }
 
-const json = (statusCode, body) => ({
-  statusCode,
-  headers: {
-    ...corsHeaders,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify(body),
-})
+function getCorsAllowedOriginsList() {
+  if (memoCorsAllowedOrigins != null) return memoCorsAllowedOrigins
+  const raw = process.env.CORS_ALLOWED_ORIGINS ?? ""
+  memoCorsAllowedOrigins = raw
+    .split(",")
+    .map((s) => normalizeOrigin(s))
+    .filter(Boolean)
+  return memoCorsAllowedOrigins
+}
 
-/** 204 responses must include the same CORS headers as JSON responses, or the browser blocks the client. */
-const noContent = () => ({
-  statusCode: 204,
-  headers: { ...corsHeaders },
-  body: "",
-})
+/**
+ * @param {{ headers?: Record<string, string | undefined> }} event
+ * @returns {string | null} Exact origin to echo in Access-Control-Allow-Origin, or null if disallowed.
+ */
+function resolveAllowedOrigin(event) {
+  const allowed = getCorsAllowedOriginsList()
+  if (allowed.length === 0) return null
+  const raw = event.headers?.Origin ?? event.headers?.origin ?? ""
+  const norm = normalizeOrigin(raw)
+  if (!norm) return null
+  return allowed.some((a) => normalizeOrigin(a) === norm) ? norm : null
+}
+
+/**
+ * @param {{ headers?: Record<string, string | undefined> }} event
+ */
+function buildCorsHeaders(event) {
+  const acao = resolveAllowedOrigin(event)
+  /** @type {Record<string, string>} */
+  const h = {
+    "Access-Control-Allow-Headers": CORS_ALLOW_HEADERS,
+    "Access-Control-Allow-Methods": CORS_ALLOW_METHODS,
+  }
+  if (acao) h["Access-Control-Allow-Origin"] = acao
+  return h
+}
 
 /** REST API (v1) Cognito pool authorizer: claims map on authorizer */
 const getSub = (event) =>
@@ -178,6 +203,33 @@ const normalizeColumnsFromPatchBody = (raw) => {
 
 exports.handler = async (event) => {
   const method = getHttpMethod(event)
+
+  const corsHeadersFor = () => buildCorsHeaders(event)
+  const json = (statusCode, body) => ({
+    statusCode,
+    headers: {
+      ...corsHeadersFor(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  })
+  /** 204 responses must include the same CORS headers as JSON responses, or the browser blocks the client. */
+  const noContent = () => ({
+    statusCode: 204,
+    headers: { ...corsHeadersFor() },
+    body: "",
+  })
+
+  if (method === "OPTIONS") {
+    return {
+      statusCode: 200,
+      headers: {
+        ...corsHeadersFor(),
+        "Access-Control-Max-Age": "86400",
+      },
+      body: "",
+    }
+  }
 
   const tableName = process.env.TABLE_NAME
   if (!tableName) {
