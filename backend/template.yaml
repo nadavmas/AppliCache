@@ -295,6 +295,80 @@ Resources:
             Auth:
               Authorizer: NONE
 
+  GenerateResumeUploadUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-GenerateResumeUploadUrl"
+      Description: Issue short-lived S3 pre-signed PUT URL for resume uploads
+      Runtime: nodejs20.x
+      Handler: index.handler
+      CodeUri: functions/resumes/generateUploadUrl/
+      Environment:
+        Variables:
+          RESUMES_BUCKET_NAME: !Ref AppliCacheResumesBucket
+          CORS_ALLOWED_ORIGINS: !Join [",", !Ref AllowedCorsOrigins]
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub "${AppliCacheResumesBucket.Arn}/*"
+      Events:
+        ResumeUploadUrl:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApplicacheRestApi
+            Path: /resumes/upload-url
+            Method: POST
+        ResumeUploadUrlOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApplicacheRestApi
+            Path: /resumes/upload-url
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+
+  CreateResumeMetadataFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-CreateResumeMetadata"
+      Description: Verify S3 object then persist resume metadata to AppliCacheData
+      Runtime: nodejs20.x
+      Handler: index.handler
+      CodeUri: functions/resumes/createMetadata/
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref AppliCacheData
+          RESUMES_BUCKET_NAME: !Ref AppliCacheResumesBucket
+          CORS_ALLOWED_ORIGINS: !Join [",", !Ref AllowedCorsOrigins]
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+              Resource: !GetAtt AppliCacheData.Arn
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "${AppliCacheResumesBucket.Arn}/*"
+      Events:
+        CreateResume:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApplicacheRestApi
+            Path: /resumes
+            Method: POST
+        ResumesCollectionOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApplicacheRestApi
+            Path: /resumes
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+
 Outputs:
   AppliCacheDataTableName:
     Description: Single-table DynamoDB name (PK/SK)
